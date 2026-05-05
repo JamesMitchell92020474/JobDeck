@@ -1,0 +1,75 @@
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { Fit, Pill } from '../ui/FitScore'
+
+const COL_COLORS = {
+  shortlisted: 'var(--col-shortlisted)',
+  applied:     'var(--col-applied)',
+  interview:   'var(--col-interview)',
+  offer:       'var(--col-offer)',
+  rejected:    'var(--col-rejected)',
+}
+
+function relativeDate(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  const diff = Date.now() - d.getTime()
+  const days = Math.floor(diff / 86400000)
+  if (days === 0) return 'today'
+  if (days === 1) return '1d ago'
+  if (days < 7)   return `${days}d ago`
+  if (days < 30)  return `${Math.floor(days / 7)}w ago`
+  return `${Math.floor(days / 30)}mo ago`
+}
+
+export default function JobCard({ job, colVar, kcStyle, srcColors, onClick, isDragging }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSortableDragging } = useSortable({
+    id: job.id,
+    disabled: isDragging, // overlay card is non-sortable
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isSortableDragging ? 0.4 : 1,
+  }
+
+  const edgeColor = COL_COLORS[colVar] || 'var(--accent)'
+  const srcColor  = srcColors?.[job.source]
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={`kc ${isDragging ? 'is-dragging' : ''}`}
+      onClick={onClick}
+    >
+      {kcStyle === 'edge' && (
+        <span className="edge-bar" style={{ background: edgeColor }} aria-hidden />
+      )}
+
+      <div className="kc-top">
+        <div>
+          <b>{job.title}</b>
+          <div className="company">{job.company}{job.location ? ` · ${job.location}` : ''}</div>
+        </div>
+        {job.fit_score != null && <Fit value={job.fit_score} />}
+      </div>
+
+      {job.source && (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <Pill style={srcColor ? { borderColor: srcColor, color: srcColor, background: `${srcColor}18` } : {}}>
+            {job.source}
+          </Pill>
+        </div>
+      )}
+
+      <div className="kc-meta">
+        <span className="kc-source">{job.job_type || ''}</span>
+        <span className="kc-date">{relativeDate(job.created_at)}</span>
+      </div>
+    </div>
+  )
+}

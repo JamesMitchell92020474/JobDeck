@@ -1,0 +1,473 @@
+import { useState, useEffect, useRef } from 'react'
+import { useApp } from '../context/AppContext'
+import Icon from '../components/ui/Icon'
+import api from '../hooks/useApi'
+
+const SOURCES = ['Seek', 'LinkedIn', 'Trade Me Jobs', 'Jora', 'Indeed']
+
+const ACCENT_SWATCHES = [
+  { color: '#423A8E', label: 'Indigo'    },
+  { color: '#2867B2', label: 'Blue'      },
+  { color: '#198754', label: 'Green'     },
+  { color: '#B8593E', label: 'Terracotta'},
+  { color: '#7A4259', label: 'Plum'      },
+]
+
+const FONT_CATALOGUE = {
+  serif: ['Fraunces','Source Serif 4','Playfair Display','Georgia','Cambria','Palatino','Garamond','Baskerville'],
+  sans:  ['Inter','-apple-system','Helvetica Neue','Segoe UI','Roboto','Avenir Next','Verdana'],
+  mono:  ['JetBrains Mono','SF Mono','Menlo','Consolas','Courier New'],
+}
+
+function HexPicker({ value, onChange }) {
+  const [draft, setDraft] = useState(value)
+  const commit = v => { if (/^#[0-9A-Fa-f]{6}$/.test(v)) onChange(v) }
+  return (
+    <label className="hex-picker">
+      <span className="hex-sw" style={{ background: value }}>
+        <input type="color" value={value} onChange={e => { onChange(e.target.value); setDraft(e.target.value) }} />
+      </span>
+      <input
+        className="hex-input"
+        value={draft.toUpperCase()}
+        onChange={e => { let v = e.target.value; if (!v.startsWith('#')) v = '#' + v; setDraft(v); commit(v) }}
+        onBlur={() => { if (!/^#[0-9A-Fa-f]{6}$/.test(draft)) setDraft(value) }}
+        spellCheck={false}
+      />
+    </label>
+  )
+}
+
+function FontSelect({ label, value, onChange }) {
+  return (
+    <label className="font-select">
+      <span className="font-select-lbl">{label}</span>
+      <select className="input" value={value} onChange={e => onChange(e.target.value)} style={{ fontFamily: `'${value}', sans-serif` }}>
+        {['serif','sans','mono'].map(cat => (
+          <optgroup key={cat} label={cat.charAt(0).toUpperCase() + cat.slice(1)}>
+            {FONT_CATALOGUE[cat].map(f => (
+              <option key={f} value={f} style={{ fontFamily: `'${f}', sans-serif` }}>{f}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function CoverLetterTemplate() {
+  const [content, setContent] = useState('')
+  const [loaded,  setLoaded]  = useState(false)
+  const [saving,  setSaving]  = useState(false)
+
+  useEffect(() => {
+    api.get('/export/cover-letter-template').then(d => { setContent(d.content || ''); setLoaded(true) }).catch(() => setLoaded(true))
+  }, [])
+
+  const save = async () => {
+    setSaving(true)
+    await api.put('/export/cover-letter-template', { content }).catch(() => {})
+    setSaving(false)
+  }
+
+  if (!loaded) return <span className="spinner" />
+
+  return (
+    <div>
+      <textarea
+        className="notes-area"
+        style={{ minHeight: 200 }}
+        value={content}
+        onChange={e => setContent(e.target.value)}
+        onBlur={save}
+        placeholder={`Preferred structure, tone, sign-off, and boilerplate.\n\nExample:\n- Open by referencing something specific about the role/company\n- 2-3 body paragraphs: relevant experience → why this role → why this company\n- Close with a clear CTA\n- Sign off: Ngā mihi, James`}
+      />
+      <div className="mono" style={{ fontSize: 10.5, color: 'var(--ink-4)', marginTop: 8 }}>
+        {saving ? 'Saving…' : 'Saved automatically on blur'}
+      </div>
+    </div>
+  )
+}
+
+export default function Settings() {
+  const { settings, saveSetting, loadSettings } = useApp()
+  const [syncing,   setSyncing]  = useState({})
+  const [hkRunning, setHkRunning]= useState(false)
+  const [hkResult,  setHkResult] = useState(null)
+  const [logs,      setLogs]     = useState([])
+  const [logsLoaded,setLogsLoaded]=useState(false)
+  const cvInput = useRef(null)
+
+  const srcColors     = (() => { try { return JSON.parse(settings.source_colors || '{}') } catch { return {} } })()
+  const disabled      = (() => { try { return JSON.parse(settings.disabled_sources || '{}') } catch { return {} } })()
+
+  const setSrcColor = (src, color) => {
+    saveSetting('source_colors', JSON.stringify({ ...srcColors, [src]: color }))
+  }
+  const toggleSrc = (src) => {
+    saveSetting('disabled_sources', JSON.stringify({ ...disabled, [src]: !disabled[src] }))
+  }
+  const syncSource = async (src) => {
+    setSyncing(s => ({ ...s, [src]: true }))
+    await api.post('/scrape', { sources: [src] }).catch(() => {})
+    setSyncing(s => ({ ...s, [src]: false }))
+  }
+  const syncAll = async () => {
+    setSyncing({ all: true })
+    await api.post('/scrape', {}).catch(() => {})
+    setSyncing({})
+  }
+  const runHousekeeping = async () => {
+    setHkRunning(true); setHkResult(null)
+    try {
+      const res = await api.post('/housekeeping/run')
+      setHkResult(res.results)
+    } catch {}
+    setHkRunning(false)
+  }
+  const loadLogs = async () => {
+    setLogsLoaded(true)
+    const data = await api.get('/logs').catch(() => [])
+    setLogs(data)
+  }
+  const uploadCV = async (file) => {
+    const fd = new FormData(); fd.append('cv', file)
+    await fetch('/api/cv/upload', { method: 'POST', body: fd })
+    await loadSettings()
+  }
+  const exportBackup = async () => {
+    const res = await api.post('/export/backup').catch(e => alert(e.message))
+    if (res?.path) alert(`Backup saved to:\n${res.path}`)
+  }
+
+  return (
+    <div className="settings">
+      <div>
+        <div className="eyebrow" style={{ marginBottom: 12 }}>Personalise · changes apply instantly</div>
+        <h1>Settings</h1>
+      </div>
+
+      {/* Appearance */}
+      <div className="set-group">
+        <h3>Appearance</h3>
+
+        <div className="set-row">
+          <div className="lbl">Theme<small>Match time of day or pick one</small></div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div className="seg">
+              {['light','dark'].map(m => (
+                <div key={m} className={`seg-opt ${settings.theme === m ? 'active' : ''}`} onClick={() => saveSetting('theme', m)}>
+                  <Icon name={m === 'light' ? 'sun' : 'moon'} size={11} />
+                  {m.charAt(0).toUpperCase() + m.slice(1)}
+                </div>
+              ))}
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12.5, color: 'var(--ink-2)' }}>
+              <span
+                className={`toggle ${settings.auto_theme === '1' ? 'on' : ''}`}
+                onClick={() => saveSetting('auto_theme', settings.auto_theme === '1' ? '0' : '1')}
+              />
+              Auto (7am–7pm)
+            </label>
+          </div>
+        </div>
+
+        <div className="set-row">
+          <div className="lbl">Accent colour<small>Used on buttons, bars, indicators</small></div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="swatch-row">
+              {ACCENT_SWATCHES.map(s => (
+                <div
+                  key={s.color}
+                  className={`swatch ${settings.accent_color === s.color ? 'active' : ''}`}
+                  style={{ background: s.color }}
+                  title={s.label}
+                  onClick={() => saveSetting('accent_color', s.color)}
+                />
+              ))}
+            </div>
+            <HexPicker value={settings.accent_color || '#423A8E'} onChange={v => saveSetting('accent_color', v)} />
+          </div>
+        </div>
+
+        <div className="set-row" style={{ alignItems: 'flex-start' }}>
+          <div className="lbl">Type pairing<small>Display + body fonts</small></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+            <div className="font-picker">
+              <FontSelect label="Display" value={settings.display_font || 'Cambria'} onChange={v => saveSetting('display_font', v)} />
+              <FontSelect label="Body"    value={settings.body_font    || 'Inter'}   onChange={v => saveSetting('body_font',    v)} />
+            </div>
+            <div className="type-preview">
+              <span className="type-preview-display">Senior Product Designer</span>
+              <span className="type-preview-body">Xero · Wellington · Hybrid</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="set-row" style={{ alignItems: 'flex-start' }}>
+          <div className="lbl">Card style<small>Kanban cards appearance</small></div>
+          <div className="card-style-picker">
+            {[{ id: 'minimal', label: 'Minimal' }, { id: 'bordered', label: 'Bordered' }, { id: 'edge', label: 'Edge tint' }].map(s => (
+              <div key={s.id} className={`csp-option ${settings.card_style === s.id ? 'active' : ''}`} onClick={() => saveSetting('card_style', s.id)}>
+                <div className="csp-preview" data-kc-style={s.id}>
+                  <div className="csp-card">
+                    <div className="csp-card-top">
+                      <div><div className="csp-title" /><div className="csp-sub" /></div>
+                      <div className="csp-fit"><span className="csp-bar"><i /></span><span className="csp-num">91</span></div>
+                    </div>
+                    <div className="csp-meta"><span className="csp-pill" /><span className="csp-pill" /></div>
+                  </div>
+                  <div className="csp-card csp-card-2">
+                    <div className="csp-card-top">
+                      <div><div className="csp-title csp-title-2" /><div className="csp-sub" /></div>
+                      <div className="csp-fit"><span className="csp-bar"><i style={{ width: '78%' }} /></span><span className="csp-num">78</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div className="csp-label">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="set-row">
+          <div className="lbl">Density</div>
+          <div className="seg">
+            {['compact','balanced','spacious'].map(d => (
+              <div key={d} className={`seg-opt ${settings.density === d ? 'active' : ''}`} onClick={() => saveSetting('density', d)}>
+                {d.charAt(0).toUpperCase() + d.slice(1)}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Job sources */}
+      <div className="set-group">
+        <h3>Job sources</h3>
+        <div className="help">JobDeck scrapes these sites every morning at 7:00 NZST. Each source has its own colour for charts and badges.</div>
+        <div className="sources-table">
+          <div className="sources-head">
+            <span>Source</span>
+            <span>Colour</span>
+            <span>Last sync</span>
+            <span></span>
+            <span>Active</span>
+          </div>
+          {SOURCES.map(src => {
+            const enabled = !disabled[src]
+            const color   = srcColors[src] || '#888'
+            return (
+              <div key={src} className="sources-row" style={{ opacity: enabled ? 1 : 0.5 }}>
+                <div className="src-name">{src}</div>
+                <label className="src-color">
+                  <span className="src-sw" style={{ background: color }} />
+                  <input type="color" value={color} onChange={e => setSrcColor(src, e.target.value)} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
+                  <span className="mono" style={{ fontSize: 11 }}>{color.toUpperCase()}</span>
+                </label>
+                <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>—</div>
+                <button
+                  className="btn btn-accent btn-sm"
+                  onClick={() => syncSource(src)}
+                  disabled={!enabled || syncing[src] || syncing.all}
+                >
+                  {syncing[src] ? <span className="spinner" /> : <Icon name="refresh" size={11} />}
+                  Sync now
+                </button>
+                <div className="src-toggle" onClick={() => toggleSrc(src)}>
+                  <span className={`toggle-lbl ${enabled ? '' : 'off'}`}>{enabled ? 'Connected' : 'Disconnected'}</span>
+                  <span className={`toggle ${enabled ? 'on' : ''}`} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <button className="btn btn-accent btn-sm" onClick={syncAll} disabled={syncing.all}>
+            {syncing.all ? <span className="spinner" /> : <Icon name="refresh" size={11} />}
+            Sync all sources
+          </button>
+        </div>
+      </div>
+
+      {/* Profile & CV */}
+      <div className="set-group">
+        <h3>Profile &amp; CV</h3>
+        <div className="set-row">
+          <div className="lbl">Display name</div>
+          <input
+            className="input"
+            style={{ maxWidth: 320 }}
+            defaultValue={settings.display_name || ''}
+            onBlur={e => saveSetting('display_name', e.target.value)}
+          />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Email</div>
+          <input
+            className="input"
+            style={{ maxWidth: 320 }}
+            defaultValue={settings.email || ''}
+            onBlur={e => saveSetting('email', e.target.value)}
+          />
+        </div>
+        <div className="set-row">
+          <div className="lbl">CV<small>Used for AI matching</small></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {settings.cv_filename ? (
+              <>
+                <div className="file-ic" style={{ width: 32, height: 36 }}>PDF</div>
+                <div>
+                  <div style={{ fontSize: 13 }}>{settings.cv_filename}</div>
+                  <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                    {settings.cv_size ? Math.round(Number(settings.cv_size) / 1024) + ' KB' : ''}
+                    {settings.cv_uploaded_at ? ' · uploaded ' + new Date(settings.cv_uploaded_at).toLocaleDateString('en-NZ') : ''}
+                  </div>
+                </div>
+                <div className="flex-1" />
+                <button className="btn btn-sm" onClick={() => cvInput.current?.click()}>Replace</button>
+              </>
+            ) : (
+              <button className="btn btn-accent btn-sm" onClick={() => cvInput.current?.click()}>
+                <Icon name="upload" size={11} /> Upload CV (PDF)
+              </button>
+            )}
+            <input ref={cvInput} type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => e.target.files[0] && uploadCV(e.target.files[0])} />
+          </div>
+        </div>
+      </div>
+
+      {/* Housekeeping */}
+      <div className="set-group">
+        <h3>Housekeeping</h3>
+        <div className="set-row">
+          <div className="lbl">Archive after<small>Days without expiry before auto-archiving</small></div>
+          <input className="input" style={{ maxWidth: 100 }} type="number" min={1} max={365}
+            defaultValue={settings.hk_age_days || '30'}
+            onBlur={e => saveSetting('hk_age_days', e.target.value)} />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Soft-delete after<small>Days in Rejected before soft-deleting</small></div>
+          <input className="input" style={{ maxWidth: 100 }} type="number" min={1}
+            defaultValue={settings.hk_soft_days || '90'}
+            onBlur={e => saveSetting('hk_soft_days', e.target.value)} />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Hard-delete after<small>Days after soft-delete before permanent removal</small></div>
+          <input className="input" style={{ maxWidth: 100 }} type="number" min={1}
+            defaultValue={settings.hk_hard_days || '14'}
+            onBlur={e => saveSetting('hk_hard_days', e.target.value)} />
+        </div>
+        <div>
+          <button className="btn btn-sm" onClick={runHousekeeping} disabled={hkRunning}>
+            {hkRunning ? <span className="spinner" /> : <Icon name="refresh" size={11} />}
+            Run housekeeping now
+          </button>
+          {hkResult && (
+            <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginLeft: 12 }}>
+              Archived {hkResult.archived} · soft-deleted {hkResult.softDeleted} · hard-deleted {hkResult.hardDeleted}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Data & Storage */}
+      <div className="set-group">
+        <h3>Data &amp; storage</h3>
+        <div className="set-row">
+          <div className="lbl">Data path</div>
+          <input className="input" style={{ maxWidth: 360 }} defaultValue={settings.data_path || 'D:\\JobDeck\\data'} disabled />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Low disk warning</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input className="input" style={{ maxWidth: 80 }} type="number" min={1}
+              defaultValue={settings.low_disk_gb || '2'}
+              onBlur={e => saveSetting('low_disk_gb', e.target.value)} />
+            <span style={{ color: 'var(--ink-3)', fontSize: 13 }}>GB</span>
+          </div>
+        </div>
+        <div>
+          <button className="btn btn-sm" onClick={exportBackup}>
+            <Icon name="download" size={11} /> Export backup
+          </button>
+        </div>
+      </div>
+
+      {/* AI */}
+      <div className="set-group">
+        <h3>AI</h3>
+        <div className="set-row">
+          <div className="lbl">API key<small>Anthropic API key for Claude features</small></div>
+          <input
+            className="input"
+            style={{ maxWidth: 380, fontFamily: 'var(--font-mono)', fontSize: 12 }}
+            type="password"
+            placeholder="sk-ant-api…"
+            defaultValue={settings.api_key || ''}
+            onBlur={e => saveSetting('api_key', e.target.value)}
+          />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Deep Analysis<small>Allows using Claude Opus for one-off deep analysis in Chat</small></div>
+          <span
+            className={`toggle ${settings.deep_analysis === '1' ? 'on' : ''}`}
+            onClick={() => saveSetting('deep_analysis', settings.deep_analysis === '1' ? '0' : '1')}
+          />
+        </div>
+      </div>
+
+      {/* Cover letter template */}
+      <div className="set-group">
+        <h3>Cover letter template</h3>
+        <div className="help">Used as the basis for all AI-generated cover letters. Define your preferred structure, tone, and sign-off.</div>
+        <CoverLetterTemplate />
+      </div>
+
+      {/* Log viewer */}
+      <div className="set-group">
+        <h3>Log viewer</h3>
+        {!logsLoaded ? (
+          <button className="btn btn-sm" onClick={loadLogs}><Icon name="database" size={11} /> Load logs</button>
+        ) : (
+          <div style={{ maxHeight: 360, overflow: 'auto', border: '1px solid var(--rule)', borderRadius: 'var(--radius)', background: 'var(--bg-sunk)' }}>
+            {logs.length === 0 ? (
+              <div style={{ padding: 16, color: 'var(--ink-3)', fontSize: 13 }}>No log entries.</div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-2)' }}>
+                  <tr>
+                    {['Time','Type','Trigger','Action','Job','Company','Reason'].map(h => (
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-4)', borderBottom: '1px solid var(--rule)' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map(l => (
+                    <tr key={l.id} style={{ borderBottom: '1px solid var(--rule)' }}>
+                      <td style={{ padding: '7px 12px', fontFamily: 'var(--font-mono)', color: 'var(--ink-4)', whiteSpace: 'nowrap' }}>
+                        {new Date(l.created_at).toLocaleString('en-NZ')}
+                      </td>
+                      <td style={{ padding: '7px 12px', color: 'var(--ink-3)' }}>{l.log_type}</td>
+                      <td style={{ padding: '7px 12px' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '2px 6px', borderRadius: 4, background: l.trigger_type === 'AUTO' ? 'var(--accent-soft)' : 'var(--bg-2)', color: l.trigger_type === 'AUTO' ? 'var(--accent)' : 'var(--ink-2)' }}>
+                          {l.trigger_type}
+                        </span>
+                      </td>
+                      <td style={{ padding: '7px 12px', fontWeight: 500, color: 'var(--ink)' }}>{l.action}</td>
+                      <td style={{ padding: '7px 12px', color: 'var(--ink-2)' }}>{l.job_title}</td>
+                      <td style={{ padding: '7px 12px', color: 'var(--ink-3)' }}>{l.company}</td>
+                      <td style={{ padding: '7px 12px', color: 'var(--ink-3)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div style={{ height: 24 }} />
+    </div>
+  )
+}

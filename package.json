@@ -1,0 +1,78 @@
+{
+  "name": "jobdeck",
+  "version": "1.0.0",
+  "description": "Personal job search dashboard",
+  "main": "src/electron/main.js",
+  "scripts": {
+    "dev": "concurrently -n \"BE,FE,EL\" -c \"blue,green,cyan\" \"npm run dev:be\" \"npm run dev:fe\" \"npm run dev:el\"",
+    "dev:be": "node --no-warnings src/backend/index.js",
+    "dev:fe": "vite",
+    "dev:el": "wait-on tcp:5173 tcp:3001 && electron .",
+    "build": "vite build && electron-builder",
+    "build:fe": "vite build",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "nz.james.jobdeck",
+    "productName": "JobDeck",
+    "copyright": "James Mitchell",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "src/electron/**/*",
+      "src/backend/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "JobDeck"
+    }
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^8.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@tiptap/extension-text-align": "^2.11.5",
+    "@tiptap/extension-underline": "^2.11.5",
+    "@tiptap/react": "^2.11.5",
+    "@tiptap/starter-kit": "^2.11.5",
+    "archiver": "^7.0.1",
+    "cors": "^2.8.5",
+    "docx": "^9.3.0",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.2",
+    "node-cron": "^3.0.3",
+    "pdf-parse": "^1.1.1",
+    "playwright": "^1.51.1",
+    "puppeteer": "^24.6.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.5.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.1.2",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "vite": "^6.3.3",
+    "wait-on": "^8.0.3"
+  }
+}

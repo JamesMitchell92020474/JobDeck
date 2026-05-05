@@ -1,0 +1,166 @@
+import { useState, useEffect } from 'react'
+import { useApp } from '../../context/AppContext'
+import { FitRing } from '../ui/FitScore'
+import Icon from '../ui/Icon'
+import api from '../../hooks/useApi'
+import OverviewTab    from './tabs/OverviewTab'
+import JobDescTab     from './tabs/JobDescTab'
+import CoverLetterTab from './tabs/CoverLetterTab'
+import ChatTab        from './tabs/ChatTab'
+import NotesTab       from './tabs/NotesTab'
+import FilesTab       from './tabs/FilesTab'
+
+const COLUMNS = ['Shortlisted', 'Applied', 'Interview', 'Offer', 'Rejected']
+const COL_COLORS = {
+  Shortlisted: 'var(--col-shortlisted)', Applied: 'var(--col-applied)',
+  Interview:   'var(--col-interview)',   Offer:   'var(--col-offer)',
+  Rejected:    'var(--col-rejected)',
+}
+const TABS = ['Overview', 'Job Description', 'Cover Letter', 'Chat', 'Notes', 'Files']
+
+export default function CardDetail({ jobId, setRoute }) {
+  const { jobs, setJobs } = useApp()
+  const [job, setJob]   = useState(null)
+  const [tab, setTab]   = useState('Overview')
+  const [chatCount, setChatCount] = useState(0)
+  const [fileCount, setFileCount] = useState(0)
+
+  useEffect(() => {
+    if (!jobId) return
+    api.get(`/jobs/${jobId}`).then(data => {
+      setJob(data)
+      setFileCount(data.files?.length || 0)
+    }).catch(() => setRoute('board'))
+
+    api.get(`/jobs/${jobId}/chat`).then(msgs => setChatCount(msgs.length)).catch(() => {})
+  }, [jobId])
+
+  if (!job) {
+    return <div style={{ padding: 'var(--pad)', color: 'var(--ink-3)' }}>Loading…</div>
+  }
+
+  const moveJob = async (status) => {
+    setJob(prev => ({ ...prev, status }))
+    setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status } : j))
+    await api.put(`/jobs/${job.id}/move`, { status })
+  }
+
+  const saveJob = async (updates) => {
+    setJob(prev => ({ ...prev, ...updates }))
+    setJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...updates } : j))
+    await api.put(`/jobs/${job.id}`, updates)
+  }
+
+  const tabCounts = { Chat: chatCount || undefined, Files: fileCount || undefined }
+
+  return (
+    <div className="detail">
+      {/* LEFT: context panel */}
+      <aside className="detail-aside">
+        <div className="detail-back" onClick={() => setRoute('board')}>
+          <Icon name="back" size={12} /> Back to board
+        </div>
+
+        <div>
+          <div className="eyebrow" style={{ marginBottom: 10 }}>{job.status}</div>
+          <h1 className="detail-h">{job.title}</h1>
+          <div className="detail-company">{job.company}{job.location ? ` · ${job.location}` : ''}</div>
+        </div>
+
+        <div className="detail-meta">
+          <div><div className="k">Source</div><div className="v">{job.source || '—'}</div></div>
+          <div><div className="k">Posted</div><div className="v">{job.posting_date || '—'}</div></div>
+          <div>
+            <div className="k">Deadline</div>
+            <div className="v">{job.deadline || <span style={{ color: 'var(--ink-3)' }}>None set</span>}</div>
+          </div>
+          <div><div className="k">Type</div><div className="v">{job.job_type || '—'}</div></div>
+          {job.salary && (
+            <div style={{ gridColumn: '1/-1' }}><div className="k">Salary</div><div className="v">{job.salary}</div></div>
+          )}
+          {job.source_url && (
+            <div style={{ gridColumn: '1/-1' }}>
+              <div className="k">Listing</div>
+              <div className="v mono" style={{ wordBreak: 'break-all', fontSize: 11 }}>
+                <a href={job.source_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+                  {job.source_url}
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {job.fit_score != null && (
+          <div className="fit-block">
+            <FitRing value={job.fit_score} size={72} />
+            <div className="copy">
+              <b>{job.fit_score >= 85 ? 'Strong match' : job.fit_score >= 70 ? 'Good match' : 'Partial match'}</b>
+              {job.ai_summary || `Your profile matches ${job.fit_score}% of the listing's stated requirements.`}
+            </div>
+          </div>
+        )}
+
+        {Array.isArray(job.skills_gaps) && job.skills_gaps.length > 0 && (
+          <div>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>Skills gaps</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+              {job.skills_gaps.map((g, i) => (
+                <span key={i} className="skill-gap">{g}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Move to</div>
+          <div className="status-select">
+            {COLUMNS.map(c => (
+              <div
+                key={c}
+                className={`status-pill ${c === job.status ? 'active' : ''}`}
+                onClick={() => moveJob(c)}
+              >
+                <span className="dot" style={{ background: COL_COLORS[c] }} />
+                <span>{c}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </aside>
+
+      {/* RIGHT: tabbed workspace */}
+      <div className="detail-main">
+        <div className="tabs">
+          {TABS.map(t => (
+            <div
+              key={t}
+              className={`tab ${tab === t ? 'active' : ''}`}
+              onClick={() => setTab(t)}
+            >
+              {t}
+              {tabCounts[t] != null && <span className="tab-ct">{tabCounts[t]}</span>}
+            </div>
+          ))}
+          <div className="flex-1" />
+          {job.source_url && (
+            <div style={{ display: 'flex', alignItems: 'center', padding: '10px 0' }}>
+              <a href={job.source_url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>
+                <Icon name="external" size={11} />
+                View on {job.source || 'site'}
+              </a>
+            </div>
+          )}
+        </div>
+
+        <div className="tab-body">
+          {tab === 'Overview'         && <OverviewTab    job={job} saveJob={saveJob} />}
+          {tab === 'Job Description'  && <JobDescTab     job={job} saveJob={saveJob} />}
+          {tab === 'Cover Letter'     && <CoverLetterTab job={job} saveJob={saveJob} />}
+          {tab === 'Chat'             && <ChatTab        job={job} onCountChange={setChatCount} />}
+          {tab === 'Notes'            && <NotesTab       job={job} saveJob={saveJob} />}
+          {tab === 'Files'            && <FilesTab       job={job} onCountChange={setFileCount} />}
+        </div>
+      </div>
+    </div>
+  )
+}

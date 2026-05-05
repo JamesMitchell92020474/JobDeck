@@ -1,0 +1,19 @@
+node_modules/
+dist/
+dist-electron/
+.env
+*.db
+*.db-journal
+
+# D: drive data — never commit
+D:\
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Electron build artifacts
+out/
