@@ -2,6 +2,10 @@
 
 Personal job search dashboard for James Mitchell. NZ context (Seek, Trade Me Jobs, Jora, Indeed, LinkedIn).
 
+## GitHub
+
+https://github.com/JamesMitchell92020474/JobDeck (private)
+
 ## Architecture
 
 ```
@@ -33,6 +37,12 @@ npm run dev:fe       # Vite on :5173
 The app works fully in browser at http://localhost:5173. Electron has a known issue
 on this machine (ESET antivirus blocks V8 context snapshot loading — see below).
 
+## Vite config note
+
+`vite.config.js` sets `root: 'src/frontend'` — Vite serves from that directory.
+`index.html` and `main.jsx` live at `src/frontend/`, not the project root.
+The proxy `/api → http://localhost:3001` is configured in vite.config.js.
+
 ## Database
 
 Uses Node.js 24 built-in `node:sqlite` (no native compilation). NOT `better-sqlite3`.
@@ -41,6 +51,13 @@ Schema: `src/backend/db/schema.js`
 Connection: `src/backend/db/database.js`
 
 All settings are key-value pairs in the `settings` table.
+
+**Transaction pattern** — `node:sqlite` has no `db.transaction()` wrapper. Use explicit:
+```js
+db.exec('BEGIN');
+try { /* statements */ db.exec('COMMIT'); }
+catch (e) { db.exec('ROLLBACK'); }
+```
 
 ## Key settings keys
 
@@ -65,6 +82,19 @@ Applied dynamically via JS in `AppContext.jsx` — accent, fonts, density, theme
 write to `document.documentElement` style/dataset.
 
 Card styles: `.kc` + `[data-kc-style="edge|bordered|minimal"]` on `.kanban-shell`.
+
+Theme is applied via `data-mode` attribute on `<html>` (NOT `data-theme`).
+Density via `data-density`. Both set in `AppContext.jsx`.
+
+Column colours (CSS vars):
+- `--col-shortlisted` #FFC107 (yellow)
+- `--col-applied`     #0D6EFD (blue)
+- `--col-interview`   #DC3545 (red / overridden by accent in some builds)
+- `--col-offer`       #198754 (green)
+- `--col-rejected`    #6E6B85 (muted)
+
+Default source colours (stored as JSON in `source_colors` setting):
+- Seek `#3D5A80` · LinkedIn `#2867B2` · Trade Me Jobs `#2E7D5B` · Jora `#A8743A` · Indeed `#5C4A8A`
 
 ## AI models
 
