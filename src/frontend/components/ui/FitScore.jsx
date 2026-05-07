@@ -18,6 +18,15 @@ export function FitRing({ value, size = 64 }) {
   )
 }
 
-export function Pill({ children, style }) {
-  return <span className="pill" style={style}>{children}</span>
+export function Pill({ children, style, onClick, title }) {
+  return (
+    <span
+      className="pill"
+      style={onClick ? { cursor: 'pointer', ...style } : style}
+      onClick={onClick}
+      title={title}
+    >
+      {children}
+    </span>
+  )
 }

@@ -17,6 +17,9 @@ function getDb() {
   db = new DatabaseSync(dbPath);
   db.exec(schema);
 
+  // Migrations for existing DBs
+  try { db.exec('ALTER TABLE jobs ADD COLUMN job_category TEXT DEFAULT NULL') } catch {}
+
   // Seed default settings
   const defaults = {
     theme:           'light',
@@ -28,11 +31,11 @@ function getDb() {
     email:           'james@mitchell.nz',
     density:         'balanced',
     source_colors:   JSON.stringify({
-      Seek:           '#3D5A80',
-      LinkedIn:       '#2867B2',
-      'Trade Me Jobs':'#2E7D5B',
-      Jora:           '#A8743A',
-      Indeed:         '#5C4A8A',
+      Seek:           '#FFC107',
+      LinkedIn:       '#0D6EFD',
+      'Trade Me Jobs':'#DC3545',
+      Jora:           '#198754',
+      Indeed:         '#6E6B85',
     }),
     disabled_sources: JSON.stringify({}),
     hk_age_days:    '30',

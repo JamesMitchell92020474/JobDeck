@@ -5,13 +5,21 @@ import api from '../hooks/useApi'
 
 const SOURCES = ['Seek', 'LinkedIn', 'Trade Me Jobs', 'Jora', 'Indeed']
 
-const ACCENT_SWATCHES = [
-  { color: '#423A8E', label: 'Indigo'    },
-  { color: '#2867B2', label: 'Blue'      },
-  { color: '#198754', label: 'Green'     },
-  { color: '#B8593E', label: 'Terracotta'},
-  { color: '#7A4259', label: 'Plum'      },
-]
+const DEFAULT_SRC_COLORS = {
+  'Seek':           '#FFC107',
+  'LinkedIn':       '#0D6EFD',
+  'Trade Me Jobs':  '#DC3545',
+  'Jora':           '#198754',
+  'Indeed':         '#6E6B85',
+}
+
+const STALE_SRC_COLORS = {
+  'Seek':           '#3D5A80',
+  'LinkedIn':       '#2867B2',
+  'Trade Me Jobs':  '#2E7D5B',
+  'Jora':           '#A8743A',
+  'Indeed':         '#5C4A8A',
+}
 
 const FONT_CATALOGUE = {
   serif: ['Fraunces','Source Serif 4','Playfair Display','Georgia','Cambria','Palatino','Garamond','Baskerville'],
@@ -20,20 +28,11 @@ const FONT_CATALOGUE = {
 }
 
 function HexPicker({ value, onChange }) {
-  const [draft, setDraft] = useState(value)
-  const commit = v => { if (/^#[0-9A-Fa-f]{6}$/.test(v)) onChange(v) }
   return (
     <label className="hex-picker">
       <span className="hex-sw" style={{ background: value }}>
-        <input type="color" value={value} onChange={e => { onChange(e.target.value); setDraft(e.target.value) }} />
+        <input type="color" value={value} onChange={e => onChange(e.target.value)} />
       </span>
-      <input
-        className="hex-input"
-        value={draft.toUpperCase()}
-        onChange={e => { let v = e.target.value; if (!v.startsWith('#')) v = '#' + v; setDraft(v); commit(v) }}
-        onBlur={() => { if (!/^#[0-9A-Fa-f]{6}$/.test(draft)) setDraft(value) }}
-        spellCheck={false}
-      />
     </label>
   )
 }
@@ -96,10 +95,23 @@ export default function Settings() {
   const [hkResult,  setHkResult] = useState(null)
   const [logs,      setLogs]     = useState([])
   const [logsLoaded,setLogsLoaded]=useState(false)
-  const cvInput = useRef(null)
+  const cvRefs = { tech: useRef(null), hospitality: useRef(null) }
 
   const srcColors     = (() => { try { return JSON.parse(settings.source_colors || '{}') } catch { return {} } })()
   const disabled      = (() => { try { return JSON.parse(settings.disabled_sources || '{}') } catch { return {} } })()
+
+  useEffect(() => {
+    if (!settings.source_colors) return
+    const updated = { ...srcColors }
+    let changed = false
+    for (const src of SOURCES) {
+      if (updated[src]?.toLowerCase() === STALE_SRC_COLORS[src]?.toLowerCase()) {
+        updated[src] = DEFAULT_SRC_COLORS[src]
+        changed = true
+      }
+    }
+    if (changed) saveSetting('source_colors', JSON.stringify(updated))
+  }, [settings.source_colors])
 
   const setSrcColor = (src, color) => {
     saveSetting('source_colors', JSON.stringify({ ...srcColors, [src]: color }))
@@ -130,9 +142,9 @@ export default function Settings() {
     const data = await api.get('/logs').catch(() => [])
     setLogs(data)
   }
-  const uploadCV = async (file) => {
+  const uploadCV = async (file, profile) => {
     const fd = new FormData(); fd.append('cv', file)
-    await fetch('/api/cv/upload', { method: 'POST', body: fd })
+    await fetch(`/api/cv/upload?profile=${profile}`, { method: 'POST', body: fd })
     await loadSettings()
   }
   const exportBackup = async () => {
@@ -174,20 +186,7 @@ export default function Settings() {
 
         <div className="set-row">
           <div className="lbl">Accent colour<small>Used on buttons, bars, indicators</small></div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div className="swatch-row">
-              {ACCENT_SWATCHES.map(s => (
-                <div
-                  key={s.color}
-                  className={`swatch ${settings.accent_color === s.color ? 'active' : ''}`}
-                  style={{ background: s.color }}
-                  title={s.label}
-                  onClick={() => saveSetting('accent_color', s.color)}
-                />
-              ))}
-            </div>
-            <HexPicker value={settings.accent_color || '#423A8E'} onChange={v => saveSetting('accent_color', v)} />
-          </div>
+          <HexPicker value={settings.accent_color || '#423A8E'} onChange={v => saveSetting('accent_color', v)} />
         </div>
 
         <div className="set-row" style={{ alignItems: 'flex-start' }}>
@@ -230,16 +229,6 @@ export default function Settings() {
           </div>
         </div>
 
-        <div className="set-row">
-          <div className="lbl">Density</div>
-          <div className="seg">
-            {['compact','balanced','spacious'].map(d => (
-              <div key={d} className={`seg-opt ${settings.density === d ? 'active' : ''}`} onClick={() => saveSetting('density', d)}>
-                {d.charAt(0).toUpperCase() + d.slice(1)}
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* Job sources */}
@@ -256,7 +245,7 @@ export default function Settings() {
           </div>
           {SOURCES.map(src => {
             const enabled = !disabled[src]
-            const color   = srcColors[src] || '#888'
+            const color   = srcColors[src] || DEFAULT_SRC_COLORS[src] || '#888'
             return (
               <div key={src} className="sources-row" style={{ opacity: enabled ? 1 : 0.5 }}>
                 <div className="src-name">{src}</div>
@@ -311,30 +300,46 @@ export default function Settings() {
             onBlur={e => saveSetting('email', e.target.value)}
           />
         </div>
-        <div className="set-row">
-          <div className="lbl">CV<small>Used for AI matching</small></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {settings.cv_filename ? (
-              <>
-                <div className="file-ic" style={{ width: 32, height: 36 }}>PDF</div>
-                <div>
-                  <div style={{ fontSize: 13 }}>{settings.cv_filename}</div>
-                  <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-                    {settings.cv_size ? Math.round(Number(settings.cv_size) / 1024) + ' KB' : ''}
-                    {settings.cv_uploaded_at ? ' · uploaded ' + new Date(settings.cv_uploaded_at).toLocaleDateString('en-NZ') : ''}
-                  </div>
-                </div>
-                <div className="flex-1" />
-                <button className="btn btn-sm" onClick={() => cvInput.current?.click()}>Replace</button>
-              </>
-            ) : (
-              <button className="btn btn-accent btn-sm" onClick={() => cvInput.current?.click()}>
-                <Icon name="upload" size={11} /> Upload CV (PDF)
-              </button>
-            )}
-            <input ref={cvInput} type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => e.target.files[0] && uploadCV(e.target.files[0])} />
-          </div>
-        </div>
+        {[
+          { key: 'tech',        label: 'CV — Tech / IT',            desc: 'Used for software, engineering, and IT roles' },
+          { key: 'hospitality', label: 'CV — Hospitality / Retail',  desc: 'Used for hospitality, food service, and retail roles' },
+        ].map(({ key, label, desc }) => {
+          const filename   = settings[`cv_filename_${key}`]
+          const size       = settings[`cv_size_${key}`]
+          const uploadedAt = settings[`cv_uploaded_at_${key}`]
+          return (
+            <div key={key} className="set-row">
+              <div className="lbl">{label}<small>{desc}</small></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {filename ? (
+                  <>
+                    <div className="file-ic" style={{ width: 32, height: 36 }}>PDF</div>
+                    <div>
+                      <div style={{ fontSize: 13 }}>{filename}</div>
+                      <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                        {size ? Math.round(Number(size) / 1024) + ' KB' : ''}
+                        {uploadedAt ? ' · uploaded ' + new Date(uploadedAt).toLocaleDateString('en-NZ') : ''}
+                      </div>
+                    </div>
+                    <div className="flex-1" />
+                    <button className="btn btn-sm" onClick={() => cvRefs[key].current?.click()}>Replace</button>
+                  </>
+                ) : (
+                  <button className="btn btn-accent btn-sm" onClick={() => cvRefs[key].current?.click()}>
+                    <Icon name="upload" size={11} /> Upload PDF
+                  </button>
+                )}
+                <input
+                  ref={cvRefs[key]}
+                  type="file"
+                  accept=".pdf"
+                  style={{ display: 'none' }}
+                  onChange={e => e.target.files[0] && uploadCV(e.target.files[0], key)}
+                />
+              </div>
+            </div>
+          )
+        })}
       </div>
 
       {/* Housekeeping */}

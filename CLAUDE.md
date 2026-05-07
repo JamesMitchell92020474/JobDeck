@@ -1,6 +1,7 @@
 # JobDeck — Claude Code Context
 
 Personal job search dashboard for James Mitchell. NZ context (Seek, Trade Me Jobs, Jora, Indeed, LinkedIn).
+Tracks both tech/IT roles and hospitality/retail roles with separate CV profiles per category.
 
 ## GitHub
 
@@ -68,9 +69,12 @@ catch (e) { db.exec('ROLLBACK'); }
 | `display_font` | default Cambria |
 | `body_font` | default Inter |
 | `card_style` | minimal / bordered / edge |
-| `density` | compact / balanced / spacious |
 | `source_colors` | JSON object, one hex per source |
-| `cv_text` | extracted text from uploaded CV PDF |
+| `cv_text` | legacy single CV (fallback if profile CVs not uploaded) |
+| `cv_text_tech` | extracted text from Tech / IT CV PDF |
+| `cv_text_hospitality` | extracted text from Hospitality / Retail CV PDF |
+| `cv_filename_tech` | filename for tech CV |
+| `cv_filename_hospitality` | filename for hospitality CV |
 | `api_key` | Anthropic API key (falls back to .env) |
 
 ## Design system
@@ -93,8 +97,8 @@ Column colours (CSS vars):
 - `--col-offer`       #198754 (green)
 - `--col-rejected`    #6E6B85 (muted)
 
-Default source colours (stored as JSON in `source_colors` setting):
-- Seek `#3D5A80` · LinkedIn `#2867B2` · Trade Me Jobs `#2E7D5B` · Jora `#A8743A` · Indeed `#5C4A8A`
+Default source colours (stored as JSON in `source_colors` setting, match column colours):
+- Seek `#FFC107` · LinkedIn `#0D6EFD` · Trade Me Jobs `#DC3545` · Jora `#198754` · Indeed `#6E6B85`
 
 ## AI models
 
@@ -128,13 +132,26 @@ route: 'dash' | 'board' | 'detail' | 'chat' | 'settings'
 | POST | /api/jobs/:id/export-word | Export as .docx |
 | POST/DELETE | /api/jobs/:id/files | File attachments |
 | GET/POST/DELETE | /api/chat | Global Claude chat |
-| POST | /api/cv/upload | Upload CV PDF |
+| POST | /api/cv/upload?profile=tech\|hospitality | Upload CV PDF (profile param selects tech or hospitality) |
 | GET/PUT | /api/settings | Settings CRUD |
 | POST | /api/scrape | Trigger Playwright scrape |
 | POST | /api/housekeeping/run | Run housekeeping manually |
 | GET | /api/logs | Activity log viewer |
 | POST | /api/export/backup | Create zip backup |
 | GET/PUT | /api/export/cover-letter-template | Cover letter template |
+
+## Job categories
+
+Jobs are auto-tagged on creation (POST /api/jobs and scraper inserts) via `src/backend/services/autoTag.js`.
+
+| Value | Label | CV used for AI |
+|-------|-------|----------------|
+| `tech` | Tech | `cv_text_tech` → `cv_text` |
+| `hospitality` | Hospitality | `cv_text_hospitality` → `cv_text` |
+| `null` | (untagged) | `cv_text_tech` → `cv_text_hospitality` → `cv_text` |
+
+On the kanban card: category pill is shown in indigo (tech) or amber (hospitality). Click to cycle `tech → hospitality → null`.
+In card detail (aside): inline Tech / Hosp. / General selector.
 
 ## Scraping
 

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   calendar_reminder TEXT,
   notes        TEXT,
   cover_letter TEXT,
+  job_category TEXT DEFAULT NULL,
   is_duplicate INTEGER DEFAULT 0,
   duplicate_of INTEGER,
   is_soft_deleted INTEGER DEFAULT 0,

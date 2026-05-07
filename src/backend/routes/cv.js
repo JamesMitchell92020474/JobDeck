@@ -25,9 +25,11 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-// POST /api/cv/upload
+// POST /api/cv/upload?profile=tech|hospitality
 router.post('/upload', upload.single('cv'), async (req, res) => {
   const { originalname, filename, size, path: filePath } = req.file;
+  const profile = ['tech', 'hospitality'].includes(req.query.profile) ? req.query.profile : null;
+  const suffix  = profile ? `_${profile}` : '';
 
   let cvText = '';
   try {
@@ -37,31 +39,33 @@ router.post('/upload', upload.single('cv'), async (req, res) => {
     cvText = parsed.text;
   } catch {}
 
-  const prev = getSetting('cv_filename');
-  setSetting('cv_filename', originalname);
-  setSetting('cv_path', filePath);
-  setSetting('cv_size', String(size));
-  setSetting('cv_uploaded_at', new Date().toISOString());
-  setSetting('cv_text', cvText);
+  const prev = getSetting(`cv_filename${suffix}`);
+  setSetting(`cv_filename${suffix}`, originalname);
+  setSetting(`cv_path${suffix}`,     filePath);
+  setSetting(`cv_size${suffix}`,     String(size));
+  setSetting(`cv_uploaded_at${suffix}`, new Date().toISOString());
+  setSetting(`cv_text${suffix}`,     cvText);
 
   log({
     type: 'activity', trigger: 'MANUAL', action: prev ? 'CV-REPLACED' : 'CV-UPLOADED',
-    reason: `${originalname} (${Math.round(size / 1024)} KB)`,
+    reason: `${profile ? `[${profile}] ` : ''}${originalname} (${Math.round(size / 1024)} KB)`,
   });
 
-  res.json({ filename: originalname, size, uploadedAt: new Date().toISOString() });
+  res.json({ filename: originalname, size, uploadedAt: new Date().toISOString(), profile });
 });
 
-// DELETE /api/cv
+// DELETE /api/cv?profile=tech|hospitality
 router.delete('/', (req, res) => {
-  const p = getSetting('cv_path');
+  const profile = ['tech', 'hospitality'].includes(req.query.profile) ? req.query.profile : null;
+  const suffix  = profile ? `_${profile}` : '';
+  const p = getSetting(`cv_path${suffix}`);
   if (p) try { fs.unlinkSync(p); } catch {}
-  setSetting('cv_filename', '');
-  setSetting('cv_path', '');
-  setSetting('cv_size', '');
-  setSetting('cv_uploaded_at', '');
-  setSetting('cv_text', '');
-  log({ type: 'activity', trigger: 'MANUAL', action: 'CV-REMOVED' });
+  setSetting(`cv_filename${suffix}`, '');
+  setSetting(`cv_path${suffix}`,     '');
+  setSetting(`cv_size${suffix}`,     '');
+  setSetting(`cv_uploaded_at${suffix}`, '');
+  setSetting(`cv_text${suffix}`,     '');
+  log({ type: 'activity', trigger: 'MANUAL', action: 'CV-REMOVED', reason: profile || 'generic' });
   res.json({ ok: true });
 });
 

@@ -75,6 +75,26 @@ export default function CardDetail({ jobId, setRoute }) {
             <div className="v">{job.deadline || <span style={{ color: 'var(--ink-3)' }}>None set</span>}</div>
           </div>
           <div><div className="k">Type</div><div className="v">{job.job_type || '—'}</div></div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <div className="k">Category</div>
+            <div className="v" style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+              {[['tech', 'Tech'], ['hospitality', 'Hosp.'], [null, 'General']].map(([val, lbl]) => (
+                <span
+                  key={String(val)}
+                  onClick={() => saveJob({ job_category: val })}
+                  style={{
+                    fontSize: 11, padding: '2px 8px', borderRadius: 4, cursor: 'pointer',
+                    fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
+                    background: job.job_category === val ? 'var(--accent)' : 'var(--bg-2)',
+                    color: job.job_category === val ? '#fff' : 'var(--ink-3)',
+                    border: `1px solid ${job.job_category === val ? 'var(--accent)' : 'var(--rule)'}`,
+                  }}
+                >
+                  {lbl}
+                </span>
+              ))}
+            </div>
+          </div>
           {job.salary && (
             <div style={{ gridColumn: '1/-1' }}><div className="k">Salary</div><div className="v">{job.salary}</div></div>
           )}

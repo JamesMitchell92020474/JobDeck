@@ -3,6 +3,7 @@
 
 const { getDb, getSetting } = require('../db/database');
 const { log } = require('./logger');
+const { autoTag } = require('./autoTag');
 
 async function scrapeSeek() {
   const results = [];
@@ -91,8 +92,8 @@ function saveJobsToDB(jobs) {
   let saved = 0;
 
   const insert = db.prepare(`
-    INSERT OR IGNORE INTO jobs (title, company, location, source, source_url, status)
-    VALUES (?, ?, ?, ?, ?, 'Shortlisted')
+    INSERT OR IGNORE INTO jobs (title, company, location, source, source_url, status, job_category)
+    VALUES (?, ?, ?, ?, ?, 'Shortlisted', ?)
   `);
 
   db.exec('BEGIN');
@@ -102,7 +103,7 @@ function saveJobsToDB(jobs) {
       const exists = db.prepare('SELECT id FROM jobs WHERE title = ? AND company = ? AND source = ?')
         .get(j.title, j.company || '', j.source);
       if (!exists) {
-        insert.run(j.title, j.company || '', j.location || '', j.source, j.url || '');
+        insert.run(j.title, j.company || '', j.location || '', j.source, j.url || '', autoTag(j.title));
         saved++;
       }
     }

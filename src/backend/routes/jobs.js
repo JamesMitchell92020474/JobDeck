@@ -5,6 +5,14 @@ const fs = require('fs');
 const { getDb, getSetting } = require('../db/database');
 const { log } = require('../services/logger');
 const { scoreFit, generateCoverLetter, jobChat } = require('../services/ai');
+const { autoTag } = require('../services/autoTag');
+
+function cvForJob(job) {
+  const cat = job.job_category;
+  if (cat === 'tech')        return getSetting('cv_text_tech')        || getSetting('cv_text') || '';
+  if (cat === 'hospitality') return getSetting('cv_text_hospitality') || getSetting('cv_text') || '';
+  return getSetting('cv_text_tech') || getSetting('cv_text_hospitality') || getSetting('cv_text') || '';
+}
 const { exportCoverLetterPDF } = require('../services/pdfExport');
 const { exportCoverLetterDocx } = require('../services/wordExport');
 
@@ -51,11 +59,12 @@ router.get('/', (req, res) => {
 // POST /api/jobs
 router.post('/', (req, res) => {
   const { title, company, location, source, source_url, description, salary, job_type, deadline } = req.body;
+  const job_category = autoTag(title, description);
   const db = getDb();
   const r = db.prepare(`
-    INSERT INTO jobs (title, company, location, source, source_url, description, salary, job_type, deadline, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Shortlisted')
-  `).run(title, company||'', location||'', source||'Manual', source_url||'', description||'', salary||'', job_type||'', deadline||'');
+    INSERT INTO jobs (title, company, location, source, source_url, description, salary, job_type, deadline, status, job_category)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Shortlisted', ?)
+  `).run(title, company||'', location||'', source||'Manual', source_url||'', description||'', salary||'', job_type||'', deadline||'', job_category);
   const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(r.lastInsertRowid);
   log({ type: 'activity', trigger: 'MANUAL', action: 'ADDED', jobTitle: title, company, source: source || 'Manual' });
   res.json(job);
@@ -73,7 +82,7 @@ router.get('/:id', (req, res) => {
 // PUT /api/jobs/:id
 router.put('/:id', (req, res) => {
   const fields = ['title','company','location','source','source_url','description','salary','job_type',
-    'deadline','calendar_reminder','notes','cover_letter','status','fit_score','ai_summary','skills_gaps'];
+    'deadline','calendar_reminder','notes','cover_letter','status','fit_score','ai_summary','skills_gaps','job_category'];
   const updates = [];
   const params = [];
   for (const f of fields) {
@@ -113,7 +122,7 @@ router.post('/:id/ai-score', async (req, res) => {
   try {
     const job = getDb().prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
     if (!job) return res.status(404).json({ error: 'Not found' });
-    const cvText = getSetting('cv_text') || '';
+    const cvText = cvForJob(job);
     const result = await scoreFit(job.description || job.title, cvText);
     getDb().prepare(`
       UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?, updated_at = datetime('now') WHERE id = ?
@@ -141,7 +150,7 @@ router.post('/:id/chat', async (req, res) => {
 
   try {
     const history = db.prepare('SELECT role, content FROM job_chat WHERE job_id = ? ORDER BY created_at ASC').all(req.params.id);
-    const cvText = getSetting('cv_text') || '';
+    const cvText = cvForJob(job);
     const { text, model } = await jobChat(history, job, cvText);
     db.prepare('INSERT INTO job_chat (job_id, role, content, model) VALUES (?, ?, ?, ?)').run(req.params.id, 'assistant', text, model);
     res.json({ role: 'assistant', content: text, model });
@@ -157,7 +166,7 @@ router.post('/:id/cover-letter', async (req, res) => {
   if (!job) return res.status(404).json({ error: 'Not found' });
 
   try {
-    const cvText  = getSetting('cv_text') || '';
+    const cvText  = cvForJob(job);
     const tmpl    = db.prepare('SELECT content FROM cover_letter_template WHERE id = 1').get();
     const text    = await generateCoverLetter(job, cvText, tmpl?.content || '');
     db.prepare("UPDATE jobs SET cover_letter = ?, updated_at = datetime('now') WHERE id = ?").run(text, req.params.id);

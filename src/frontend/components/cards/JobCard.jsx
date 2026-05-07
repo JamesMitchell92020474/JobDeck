@@ -1,6 +1,13 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Fit, Pill } from '../ui/FitScore'
+import { useApp } from '../../context/AppContext'
+import api from '../../hooks/useApi'
+
+const CAT = {
+  tech:        { label: 'Tech',        style: { borderColor: 'var(--accent)', color: 'var(--accent)', background: 'var(--accent-soft)' } },
+  hospitality: { label: 'Hospitality', style: { borderColor: '#E07B39',       color: '#E07B39',        background: '#E07B3918' } },
+}
 
 const COL_COLORS = {
   shortlisted: 'var(--col-shortlisted)',
@@ -23,6 +30,7 @@ function relativeDate(dateStr) {
 }
 
 export default function JobCard({ job, colVar, kcStyle, srcColors, onClick, isDragging }) {
+  const { setJobs } = useApp()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSortableDragging } = useSortable({
     id: job.id,
     disabled: isDragging, // overlay card is non-sortable
@@ -36,6 +44,15 @@ export default function JobCard({ job, colVar, kcStyle, srcColors, onClick, isDr
 
   const edgeColor = COL_COLORS[colVar] || 'var(--accent)'
   const srcColor  = srcColors?.[job.source]
+
+  const cycleCategory = (e) => {
+    e.stopPropagation()
+    const next = job.job_category === 'tech' ? 'hospitality'
+               : job.job_category === 'hospitality' ? null
+               : 'tech'
+    setJobs(prev => prev.map(j => j.id === job.id ? { ...j, job_category: next } : j))
+    api.put(`/jobs/${job.id}`, { job_category: next }).catch(() => {})
+  }
 
   return (
     <div
@@ -58,11 +75,22 @@ export default function JobCard({ job, colVar, kcStyle, srcColors, onClick, isDr
         {job.fit_score != null && <Fit value={job.fit_score} />}
       </div>
 
-      {job.source && (
-        <div style={{ display: 'flex', gap: 6 }}>
-          <Pill style={srcColor ? { borderColor: srcColor, color: srcColor, background: `${srcColor}18` } : {}}>
-            {job.source}
-          </Pill>
+      {(job.source || job.job_category) && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {job.job_category && (
+            <Pill
+              style={CAT[job.job_category]?.style}
+              onClick={cycleCategory}
+              title="Click to change category"
+            >
+              {CAT[job.job_category]?.label}
+            </Pill>
+          )}
+          {job.source && (
+            <Pill style={srcColor ? { borderColor: srcColor, color: srcColor, background: `${srcColor}18` } : {}}>
+              {job.source}
+            </Pill>
+          )}
         </div>
       )}
 
