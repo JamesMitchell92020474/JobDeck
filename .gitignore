@@ -8,6 +8,10 @@ dist-electron/
 # D: drive data — never commit
 D:\
 
+# CVs and personal documents
+assets/*.pdf
+assets/*.docx
+
 # OS
 .DS_Store
 Thumbs.db
