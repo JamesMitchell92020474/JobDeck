@@ -1,125 +1,93 @@
 # JobDeck
 
-Personal job search dashboard — NZ-focused, AI-powered, runs as a desktop app.
+A personal job search dashboard for the NZ market. Scrapes Seek, Trade Me Jobs, Jora and Indeed daily, scores listings against your CV using Claude, and tracks applications through a kanban board.
 
-## Stack
+## Features
 
-| Layer | Tech |
-|---|---|
-| Frontend | React 18 + Vite |
-| Backend | Node.js + Express |
-| Database | SQLite (node:sqlite — built into Node.js 22+) |
-| Scraping | Playwright |
-| DnD | dnd-kit |
-| Editor | TipTap |
-| PDF export | Puppeteer |
-| Word export | docx |
-| Scheduling | node-cron |
-| Desktop | Electron |
-| AI | Claude API (Anthropic) |
-
-## Folder structure
-
-```
-C:\Users\James\Projects\JobDeck\
-├── src\
-│   ├── frontend\        React + Vite app
-│   ├── backend\         Express API
-│   └── electron\        Electron main process
-├── assets\              App icon
-├── dist\                Built frontend (generated)
-├── dist-electron\       Packaged installer (generated)
-├── .env                 Configuration (not committed)
-└── package.json
-```
-
-Data lives on the D: drive (created automatically on first run):
-
-```
-D:\JobDeck\
-├── data\
-│   ├── jd-database.db
-│   └── uploads\  (cv, cover-letters, attachments)
-├── logs\
-└── backups\
-```
+- **Kanban board** — Shortlisted → Applied → Interview → Offer → Rejected → Archived
+- **Automated scraping** — Seek, Trade Me Jobs, Jora, Indeed scraped daily at 7:00 NZST using your keywords and location
+- **AI fit scoring** — Each job scored 0–100 against your CV via Claude, with a match summary, skills gaps, and deadline extraction
+- **Rich job descriptions** — Fetched on demand from the source listing, rendered as formatted HTML with company logo
+- **Dual CV profiles** — Separate CVs for Tech/IT and Hospitality/Retail roles; AI uses the right one automatically
+- **Cover letter generation** — Claude writes a tailored cover letter using your CV and a template you define
+- **Dashboard** — Weekly activity line chart, pipeline counts, source breakdown, upcoming deadlines
+- **Manual job entry** — Add jobs from any source via the quick-add form on the board
 
 ## Prerequisites
 
-- Windows 10/11
-- Node.js 22 or later (24 recommended — uses built-in `node:sqlite`)
-- D: drive (or edit DATA_PATH in .env)
+- [Node.js 24+](https://nodejs.org/)
+- [Playwright Chromium](https://playwright.dev/) — `npx playwright install chromium`
+- An [Anthropic API key](https://console.anthropic.com/) for AI features
+- A D: drive (or update `DATA_PATH` in `.env`)
 
 ## Setup
 
+**1. Clone and install**
 ```powershell
-# 1. Install dependencies
-cd C:\Users\James\Projects\JobDeck
+git clone https://github.com/JamesMitchell92020474/JobDeck.git
+cd JobDeck
 npm install
-
-# 2. Install Playwright browsers (for scraping)
 npx playwright install chromium
+```
 
-# 3. Configure .env
-# Add your ANTHROPIC_API_KEY
-notepad .env
+**2. Create `.env`**
+```
+ANTHROPIC_API_KEY=sk-ant-...
+DATA_PATH=D:\JobDeck\data
+LOG_PATH=D:\JobDeck\logs
+BACKUP_PATH=D:\JobDeck\backups
+PORT=3001
+NODE_ENV=development
+LOW_DISK_WARNING_GB=2
+ACCENT_COLOR=#423A8E
+```
 
-# 4. Run in development
+**3. Run in dev**
+```powershell
 npm run dev
 ```
 
-## Environment variables (.env)
+Opens at **http://localhost:5173**. The backend auto-restarts on file changes via nodemon.
 
-| Variable | Default | Description |
-|---|---|---|
-| `ANTHROPIC_API_KEY` | — | Required for all AI features |
-| `DATA_PATH` | `D:\JobDeck\data` | SQLite DB and uploads |
-| `LOG_PATH` | `D:\JobDeck\logs` | Activity and error logs |
-| `BACKUP_PATH` | `D:\JobDeck\backups` | Backup zip files |
-| `PORT` | `3001` | Backend API port |
-| `LOW_DISK_WARNING_GB` | `2` | Disk space warning threshold |
-| `ACCENT_COLOR` | `#423A8E` | Default accent colour |
+**4. Upload your CVs**
 
-## Development
+Go to Settings → Profile & CV and upload PDFs for your Tech and Hospitality profiles. These are used for AI scoring and cover letter generation.
 
-```powershell
-npm run dev          # Start backend + frontend + Electron
-npm run dev:be       # Backend only
-npm run dev:fe       # Vite frontend only
+**5. Configure scraper**
+
+Go to Settings → Scraper preferences and set your location, keywords, and max job age. Then hit **Sync all sources** to pull your first batch of listings.
+
+## Data
+
+All data is stored locally:
+
+| Path | Contents |
+|------|----------|
+| `D:\JobDeck\data\jd-database.db` | SQLite database (jobs, settings, chat history) |
+| `D:\JobDeck\data\uploads\` | CV PDFs, cover letters, attachments |
+| `D:\JobDeck\logs\` | Monthly rotating log files |
+| `D:\JobDeck\backups\` | Zip backups (Settings → Export backup) |
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 18 + Vite |
+| Backend | Express + Node.js 24 |
+| Database | node:sqlite (built-in, no native compilation) |
+| Scraping | Playwright (Chromium) |
+| AI | Anthropic Claude (Sonnet for scoring/chat, Opus for deep analysis) |
+| Desktop | Electron (optional — see known issues) |
+
+## Known issues
+
+### ESET antivirus blocking Electron
+ESET blocks Electron's V8 context snapshot. The app works fully in the browser at http://localhost:5173 without Electron. To fix, add these paths to ESET exclusions (Advanced Setup → Protections → Real-time file system protection → Exclusions → Paths):
+
+```
+C:\Users\<you>\Projects\JobDeck\node_modules\electron\dist\
+C:\Users\<you>\AppData\Local\ms-playwright\
 ```
 
-## Production build
-
-```powershell
-npm run build        # Build frontend + package Electron
-```
-
-Output goes to `dist-electron\`.
-
-## First run
-
-On first run the app will:
-1. Create D:\JobDeck folder structure
-2. Initialise the SQLite database
-3. Set default settings
-4. Register cron jobs (daily scrape 7am NZST, housekeeping 2am NZST)
-
-## Scraping
-
-LinkedIn can't be scraped — use manual import (paste job URL or description).
-
-Before using scraping features:
-```powershell
-npx playwright install chromium
-```
-
-## AI features
-
-All AI features require `ANTHROPIC_API_KEY` in .env. You can also enter it in Settings → AI.
-
-- Welcome message: generated fresh each session
-- Fit scoring + skills gap: on each job import  
-- Cover letter generation: per-card, using your CV + template
-- Per-card chat: job + CV context, claude-sonnet-4-20250514
-- Global chat: full job list context, claude-sonnet-4-20250514
-- Deep Analysis: claude-opus-4-20250514, manually triggered in Chat
+### node:sqlite experimental warning
+Suppressed with `node --no-warnings`. The module is stable in Node.js 24 despite the label.
