@@ -6,6 +6,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import KanbanColumn from './KanbanColumn'
 import JobCard from '../cards/JobCard'
 import AddJobModal from '../cards/AddJobModal'
+import Icon from '../ui/Icon'
 import { useApp } from '../../context/AppContext'
 import api from '../../hooks/useApi'
 
@@ -122,6 +123,24 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
           </div>
         )}
         <div className="flex-1" />
+        {filterResult && (
+          <span className="ai-filter-result">
+            Archived {filterResult.archived} · kept {filterResult.kept}
+            {filterResult.scored > 0 ? ` · scored ${filterResult.scored}` : ''}
+          </span>
+        )}
+        <button
+          className="btn-ai-filter"
+          onClick={handleFilterNew}
+          disabled={filteringNew}
+          title="Score unscored New jobs and archive poor fits (below 40)"
+        >
+          {filteringNew
+            ? <span className="spinner" style={{ width: 13, height: 13, borderColor: 'rgba(255,255,255,.35)', borderTopColor: '#fff' }} />
+            : <Icon name="wand" size={13} />
+          }
+          Filter with AI
+        </button>
       </div>
 
       {/* Board */}
@@ -146,9 +165,6 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
                   srcColors={srcColors}
                   onCardClick={id => { setDetailJobId(id); setRoute('detail') }}
                   onAddJob={col => setAddingToCol(col)}
-                  onFilterNew={col === 'New' ? handleFilterNew : undefined}
-                  filteringNew={col === 'New' ? filteringNew : false}
-                  filterResult={col === 'New' ? filterResult : null}
                 />
               </SortableContext>
             )
