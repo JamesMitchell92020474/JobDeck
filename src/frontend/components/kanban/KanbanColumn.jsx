@@ -8,9 +8,10 @@ const COL_COLORS = {
   interview:   'var(--col-interview)',
   offer:       'var(--col-offer)',
   rejected:    'var(--col-rejected)',
+  archived:    'var(--col-archived)',
 }
 
-export default function KanbanColumn({ col, colVar, jobs, kcStyle, srcColors, onCardClick }) {
+export default function KanbanColumn({ col, colVar, jobs, kcStyle, srcColors, onCardClick, onAddJob }) {
   const { setNodeRef, isOver } = useDroppable({ id: col })
 
   return (
@@ -36,7 +37,7 @@ export default function KanbanColumn({ col, colVar, jobs, kcStyle, srcColors, on
         ))}
       </div>
 
-      <div className="add-card" onClick={() => onCardClick(null)}>
+      <div className="add-card" onClick={() => onAddJob(col)}>
         <Icon name="plus" size={11} /> Add to {col}
       </div>
     </div>

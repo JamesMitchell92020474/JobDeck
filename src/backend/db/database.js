@@ -19,6 +19,7 @@ function getDb() {
 
   // Migrations for existing DBs
   try { db.exec('ALTER TABLE jobs ADD COLUMN job_category TEXT DEFAULT NULL') } catch {}
+  try { db.exec('ALTER TABLE jobs ADD COLUMN logo_url TEXT') } catch {}
 
   // Seed default settings
   const defaults = {

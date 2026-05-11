@@ -26,12 +26,12 @@ Data lives on D: drive — created automatically on first run:
 
 ```powershell
 cd C:\Users\James\Projects\JobDeck
-npm run dev          # starts backend + Vite + Electron concurrently
+npm run dev          # starts backend (nodemon) + Vite + Electron concurrently
 ```
 
 Or separately:
 ```powershell
-npm run dev:be       # backend on :3001
+npm run dev:be       # backend on :3001 (auto-restarts via nodemon on file changes)
 npm run dev:fe       # Vite on :5173
 ```
 
@@ -53,6 +53,8 @@ Connection: `src/backend/db/database.js`
 
 All settings are key-value pairs in the `settings` table.
 
+Migrations run in `database.js` via `try { db.exec('ALTER TABLE...') } catch {}` — add new columns there.
+
 **Transaction pattern** — `node:sqlite` has no `db.transaction()` wrapper. Use explicit:
 ```js
 db.exec('BEGIN');
@@ -70,12 +72,18 @@ catch (e) { db.exec('ROLLBACK'); }
 | `body_font` | default Inter |
 | `card_style` | minimal / bordered / edge |
 | `source_colors` | JSON object, one hex per source |
+| `disabled_sources` | JSON object, source → bool |
 | `cv_text` | legacy single CV (fallback if profile CVs not uploaded) |
 | `cv_text_tech` | extracted text from Tech / IT CV PDF |
 | `cv_text_hospitality` | extracted text from Hospitality / Retail CV PDF |
 | `cv_filename_tech` | filename for tech CV |
 | `cv_filename_hospitality` | filename for hospitality CV |
 | `api_key` | Anthropic API key (falls back to .env) |
+| `scraper_location` | City/region for scraper searches (default: Christchurch) |
+| `scraper_keywords_tech` | Comma-separated keywords for tech searches |
+| `scraper_keywords_hospitality` | Comma-separated keywords for hospitality searches |
+| `scraper_max_age_days` | Only pull jobs posted within this many days (default: 30) |
+| `last_sync_{source}` | ISO timestamp of last successful sync per source |
 
 ## Design system
 
@@ -93,11 +101,12 @@ Density via `data-density`. Both set in `AppContext.jsx`.
 Column colours (CSS vars):
 - `--col-shortlisted` #FFC107 (yellow)
 - `--col-applied`     #0D6EFD (blue)
-- `--col-interview`   #DC3545 (red / overridden by accent in some builds)
+- `--col-interview`   #DC3545 (red)
 - `--col-offer`       #198754 (green)
-- `--col-rejected`    #6E6B85 (muted)
+- `--col-archived`    #8C7860 (warm brown)
+- `--col-rejected`    #6E6B85 (muted purple)
 
-Default source colours (stored as JSON in `source_colors` setting, match column colours):
+Default source colours (stored as JSON in `source_colors` setting):
 - Seek `#FFC107` · LinkedIn `#0D6EFD` · Trade Me Jobs `#DC3545` · Jora `#198754` · Indeed `#6E6B85`
 
 ## AI models
@@ -108,6 +117,8 @@ Default source colours (stored as JSON in `source_colors` setting, match column 
 
 API key loaded from `ANTHROPIC_API_KEY` env var, falls back to `api_key` DB setting.
 
+`scoreFit()` returns: `{ fit_score, summary, skills_gaps, deadline }` — deadline extracted from job description text in the same call, saved only if job doesn't already have one.
+
 ## Frontend routing
 
 No React Router — uses simple string state in `App.jsx`:
@@ -116,29 +127,41 @@ route: 'dash' | 'board' | 'detail' | 'chat' | 'settings'
 ```
 `detailJobId` holds the current job ID when `route === 'detail'`.
 
+Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
+
 ## API routes
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | /api/stats | Dashboard counts, activity, sources |
+| GET | /api/stats | Dashboard counts, activity (NZ timezone), sources |
 | GET | /api/stats/welcome | AI-generated welcome message |
 | GET/POST | /api/jobs | List / create jobs |
 | GET/PUT/DELETE | /api/jobs/:id | Single job CRUD |
 | PUT | /api/jobs/:id/move | Move to kanban column |
 | POST | /api/jobs/:id/ai-score | Score job against CV |
+| POST | /api/jobs/:id/fetch-description | Scrape description, logo, posting_date, job_type from source_url; auto-scores in background |
 | GET/POST | /api/jobs/:id/chat | Per-card Claude chat |
 | POST | /api/jobs/:id/cover-letter | Generate cover letter |
 | POST | /api/jobs/:id/export-pdf | Export cover letter as PDF |
 | POST | /api/jobs/:id/export-word | Export as .docx |
 | POST/DELETE | /api/jobs/:id/files | File attachments |
 | GET/POST/DELETE | /api/chat | Global Claude chat |
-| POST | /api/cv/upload?profile=tech\|hospitality | Upload CV PDF (profile param selects tech or hospitality) |
+| POST | /api/cv/upload?profile=tech\|hospitality | Upload CV PDF |
 | GET/PUT | /api/settings | Settings CRUD |
 | POST | /api/scrape | Trigger Playwright scrape |
 | POST | /api/housekeeping/run | Run housekeeping manually |
+| POST | /api/housekeeping/cleanup-unmatched | Remove scraped jobs not matching keywords+location (`{ dryRun: bool }`) |
 | GET | /api/logs | Activity log viewer |
 | POST | /api/export/backup | Create zip backup |
 | GET/PUT | /api/export/cover-letter-template | Cover letter template |
+
+## Kanban columns
+
+Order: Shortlisted → Applied → Interview → Offer → Rejected → Archived
+
+- **Archived** — aged out (30d), expired, or manually dismissed. Housekeeping moves jobs here automatically.
+- **Rejected** — applied and didn't get it (user-initiated only).
+- Housekeeping soft-deletes jobs in either Archived or Rejected after 90 days.
 
 ## Job categories
 
@@ -148,10 +171,10 @@ Jobs are auto-tagged on creation (POST /api/jobs and scraper inserts) via `src/b
 |-------|-------|----------------|
 | `tech` | Tech | `cv_text_tech` → `cv_text` |
 | `hospitality` | Hospitality | `cv_text_hospitality` → `cv_text` |
-| `null` | (untagged) | `cv_text_tech` → `cv_text_hospitality` → `cv_text` |
+| `null` | General | `cv_text_tech` → `cv_text_hospitality` → `cv_text` |
 
-On the kanban card: category pill is shown in indigo (tech) or amber (hospitality). Click to cycle `tech → hospitality → null`.
-In card detail (aside): inline Tech / Hosp. / General selector.
+Category shown as label + dropdown selector in card detail aside.
+Board has category filter chips: All / Tech / Hospitality / General.
 
 ## Scraping
 
@@ -160,20 +183,45 @@ Run `npx playwright install chromium` before using.
 LinkedIn: manual import only (no scraping).
 Cron schedule: `src/backend/cron.js` — daily scrape 7:00 NZST, housekeeping 2:00 NZST.
 
+Scraper reads `scraper_location`, `scraper_keywords_tech`, `scraper_keywords_hospitality`, `scraper_max_age_days` from settings to build search URLs. Seek uses `daterange` param for age filtering. Saves `last_sync_{source}` setting on completion.
+
+Extracts per job from search results: title, company, location, url, job_type, posting_date.
+
+### fetch-description (on-demand, per job)
+
+`POST /api/jobs/:id/fetch-description` — launches Playwright, visits `source_url`, extracts:
+- Description HTML (cleaned: keeps p/ul/ol/li/strong/em/h1-h4/a, strips everything else)
+- Company logo URL
+- Posting date (refined from detail page)
+- Job type (refined from detail page)
+
+Uses `waitUntil: 'load'` + 1.5s settle delay (not networkidle — too slow on Seek).
+After saving, auto-scores in background via `scoreFit()` (non-blocking).
+
+Description is stored as cleaned HTML and rendered with `dangerouslySetInnerHTML`. Plain-text fallback (pre-wrap) for jobs fetched before HTML support.
+
+### Board filtering
+
+Filter chips above the kanban: source chips + category chips (All/Tech/Hospitality/General).
+Frontend-only, no DB queries. Board sorts by `created_at DESC` within each column.
+
 ## Known issues
 
 ### Electron V8 snapshot (ESET antivirus)
 `require('electron').app` returns `undefined` in the main process because ESET blocks
-Electron's V8 context snapshot from loading. The snapshot (`v8_context_snapshot.bin`)
-is what registers Electron's JS API on top of Node.js.
+Electron's V8 context snapshot from loading.
 
-**Fix:** Add Electron dist folder to ESET exclusions OR pause ESET temporarily:
+**Fix:** Add Electron dist folder to ESET exclusions:
 `C:\Users\James\Projects\JobDeck\node_modules\electron\dist\`
 
 In ESET: Advanced Setup → Protections → Real-time file system protection → Exclusions
-(look for the "Paths" exclusion type, NOT the "Extensions" type).
+(use "Paths" exclusion type, NOT "Extensions").
 
 The app is fully functional at http://localhost:5173 without Electron.
+
+### Playwright / ESET
+ESET may also block Playwright's Chromium. Add to exclusions:
+`C:\Users\james\AppData\Local\ms-playwright\`
 
 ### node:sqlite experimental warning
 `node --no-warnings` suppresses it. It's stable in Node.js 24 despite the label.
@@ -193,8 +241,8 @@ ACCENT_COLOR=#423A8E
 
 ## User preferences
 
-- James has graphic design + frontend dev background — UI quality matters
+- James Mitchell · hello@jamesmitchell.co.nz · Christchurch, NZ
+- Graphic design + frontend dev background — UI quality matters
 - NZ context: Xero, Sharesies, Hnry, Auror, Tracksuit, Cin7 are realistic companies
 - Sources: Seek, Trade Me Jobs, LinkedIn (manual only), Jora, Indeed
-- Display name: James Mitchell · james@mitchell.nz
 - Default fonts: Cambria (display) + Inter (body)

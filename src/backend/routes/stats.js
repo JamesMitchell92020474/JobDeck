@@ -7,17 +7,50 @@ const router = express.Router();
 // GET /api/stats
 router.get('/', (req, res) => {
   const db = getDb();
-  const cols = ['Shortlisted','Applied','Interview','Offer','Rejected'];
+  const cols = ['Shortlisted','Applied','Interview','Offer','Rejected','Archived'];
   const counts = {};
   for (const c of cols) {
     counts[c] = db.prepare('SELECT COUNT(*) as n FROM jobs WHERE status = ? AND is_soft_deleted = 0').get(c).n;
   }
 
+  // Compute NZ offset in hours (handles NZST +12 and NZDT +13 automatically)
+  function getNZOffset() {
+    const now = new Date();
+    const nzDate = new Date(now.toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
+    const utcDate = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+    return Math.round((nzDate - utcDate) / 3600000);
+  }
+  const nzOffset = getNZOffset();
+  const offsetStr = `+${nzOffset} hours`;
+
+  // Today's date in NZ as YYYY-MM-DD (shift UTC now by NZ offset, then read UTC date)
+  const nzNowMs  = Date.now() + nzOffset * 3600000;
+  const nzTodayStr = new Date(nzNowMs).toISOString().slice(0, 10);
+  const nzToday  = new Date(nzTodayStr + 'T00:00:00Z');
+
+  // Monday of current NZ week (week starts Monday)
+  const dow = nzToday.getUTCDay(); // 0=Sun
+  const daysFromMon = dow === 0 ? 6 : dow - 1;
+  const monday = new Date(nzToday);
+  monday.setUTCDate(monday.getUTCDate() - daysFromMon);
+
   const activity = [];
-  for (let i = 6; i >= 0; i--) {
-    const row = db.prepare(`SELECT COUNT(*) as n FROM jobs WHERE date(created_at) = date('now', '-' || ? || ' days') AND is_soft_deleted = 0`).get(i);
-    const d = new Date(); d.setDate(d.getDate() - i);
-    activity.push({ day: d.toLocaleDateString('en-NZ', { weekday: 'short' }), n: row.n });
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setUTCDate(d.getUTCDate() + i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const isFuture = d > nzToday;
+    const listings = isFuture ? 0 : db.prepare(`
+      SELECT COUNT(*) as n FROM jobs
+      WHERE date(datetime(created_at, ?)) = ? AND is_soft_deleted = 0
+    `).get(offsetStr, dateStr).n;
+    const applications = isFuture ? 0 : db.prepare(`
+      SELECT COUNT(*) as n FROM activity_logs
+      WHERE action = 'MOVED' AND reason = 'Moved to Applied'
+        AND date(datetime(created_at, ?)) = ?
+    `).get(offsetStr, dateStr).n;
+    const label = new Intl.DateTimeFormat('en-NZ', { weekday: 'short', timeZone: 'UTC' }).format(d);
+    activity.push({ day: label, listings, applications });
   }
 
   const sources = db.prepare(`
@@ -30,8 +63,9 @@ router.get('/', (req, res) => {
   `).all();
 
   const recent = db.prepare(`
-    SELECT COUNT(*) as n FROM jobs WHERE created_at >= datetime('now', '-1 day') AND is_soft_deleted = 0
-  `).get().n;
+    SELECT COUNT(*) as n FROM jobs
+    WHERE date(datetime(created_at, ?)) = ? AND is_soft_deleted = 0
+  `).get(offsetStr, nzTodayStr).n;
 
   const upcoming7 = db.prepare(`
     SELECT COUNT(*) as n FROM jobs WHERE deadline IS NOT NULL AND deadline != '' AND is_soft_deleted = 0

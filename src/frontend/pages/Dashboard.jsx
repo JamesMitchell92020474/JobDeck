@@ -4,7 +4,49 @@ import { Fit, Pill } from '../components/ui/FitScore'
 import Icon from '../components/ui/Icon'
 import api from '../hooks/useApi'
 
-const COLUMNS = ['Shortlisted', 'Applied', 'Interview', 'Offer', 'Rejected']
+function LineChart({ data, maxVal }) {
+  const W = 500, H = 110, PAD = { t: 16, r: 8, b: 28, l: 28 }
+  const iW = W - PAD.l - PAD.r
+  const iH = H - PAD.t - PAD.b
+  const n  = data.length
+
+  const xPos = i => PAD.l + (i / (n - 1)) * iW
+  const yPos = v => PAD.t + iH - (v / maxVal) * iH
+
+  const polyline = (key, color) => {
+    const pts = data.map((d, i) => `${xPos(i)},${yPos(d[key] || 0)}`).join(' ')
+    return (
+      <g key={key}>
+        <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        {data.map((d, i) => (d[key] || 0) > 0 && (
+          <g key={i}>
+            <circle cx={xPos(i)} cy={yPos(d[key])} r="3.5" fill={color} />
+            <text x={xPos(i)} y={yPos(d[key]) - 7} textAnchor="middle" fontSize="10" fill={color} fontFamily="var(--font-mono)">{d[key]}</text>
+          </g>
+        ))}
+      </g>
+    )
+  }
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', overflow: 'visible' }}>
+      {/* Grid lines */}
+      {[0, 0.5, 1].map(f => (
+        <line key={f} x1={PAD.l} x2={W - PAD.r} y1={PAD.t + iH * (1 - f)} y2={PAD.t + iH * (1 - f)}
+          stroke="var(--rule)" strokeWidth="1" strokeDasharray={f === 0 ? 'none' : '3 3'} />
+      ))}
+      {polyline('listings',     'var(--accent)')}
+      {polyline('applications', 'var(--col-offer)')}
+      {/* X axis labels */}
+      {data.map((d, i) => (
+        <text key={i} x={xPos(i)} y={H - 4} textAnchor="middle" fontSize="10.5"
+          fill="var(--ink-3)" fontFamily="var(--font-body)">{d.day}</text>
+      ))}
+    </svg>
+  )
+}
+
+const COLUMNS = ['Shortlisted', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived']
 
 export default function Dashboard({ setRoute, setDetailJobId }) {
   const { jobs, getSourceColors } = useApp()
@@ -29,9 +71,9 @@ export default function Dashboard({ setRoute, setDetailJobId }) {
 
   const activity = statsData?.activity || Array.from({ length: 7 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() - (6 - i))
-    return { day: d.toLocaleDateString('en-NZ', { weekday: 'short' }), n: 0 }
+    return { day: d.toLocaleDateString('en-NZ', { weekday: 'short' }), listings: 0, applications: 0 }
   })
-  const maxAct = Math.max(...activity.map(a => a.n), 1)
+  const maxAct = Math.max(...activity.map(a => Math.max(a.listings || 0, a.applications || 0)), 1)
 
   const sources    = statsData?.sources || []
   const totalSrc   = sources.reduce((s, r) => s + r.n, 0) || 1
@@ -48,7 +90,7 @@ export default function Dashboard({ setRoute, setDetailJobId }) {
 
   const pipeDeltas = {
     Shortlisted: statsData?.recent ? `+${statsData.recent} new` : '—',
-    Applied: '—', Interview: '—', Offer: '—', Rejected: '—',
+    Applied: '—', Interview: '—', Offer: '—', Rejected: '—', Archived: '—',
   }
 
   return (
@@ -57,7 +99,7 @@ export default function Dashboard({ setRoute, setDetailJobId }) {
       <div className="hello">
         <div className="hello-meta">
           <span className="eyebrow">{dayStr}</span>
-          <span className="eyebrow">Wellington · NZ</span>
+          <span className="eyebrow">Christchurch · NZ</span>
         </div>
         <h1 className="hello-h">
           {greet}, <em>James</em>.{' '}
@@ -86,18 +128,20 @@ export default function Dashboard({ setRoute, setDetailJobId }) {
           <div className="card-head">
             <div>
               <div className="eyebrow" style={{ marginBottom: 6 }}>Weekly activity</div>
-              <div className="card-title">Applications this week</div>
+              <div className="card-title">Listings &amp; applications this week</div>
+            </div>
+            <div style={{ display: 'flex', gap: 14, fontSize: 12, color: 'var(--ink-3)', alignItems: 'center' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 20, height: 2, background: 'var(--accent)', display: 'inline-block', borderRadius: 1 }} />
+                Listings
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 20, height: 2, background: 'var(--col-offer)', display: 'inline-block', borderRadius: 1 }} />
+                Applied
+              </span>
             </div>
           </div>
-          <div className="bars">
-            {activity.map(a => (
-              <div key={a.day} className={`bar ${a.n === 0 ? 'empty' : ''}`}>
-                {a.n > 0 && <b>{a.n}</b>}
-                <i style={{ height: `${(a.n / maxAct) * 80 || 4}%` }} />
-                <span>{a.day}</span>
-              </div>
-            ))}
-          </div>
+          <LineChart data={activity} maxVal={maxAct} />
         </div>
 
         <div className="card">

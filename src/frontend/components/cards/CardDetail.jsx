@@ -4,32 +4,46 @@ import { FitRing } from '../ui/FitScore'
 import Icon from '../ui/Icon'
 import api from '../../hooks/useApi'
 import OverviewTab    from './tabs/OverviewTab'
-import JobDescTab     from './tabs/JobDescTab'
 import CoverLetterTab from './tabs/CoverLetterTab'
 import ChatTab        from './tabs/ChatTab'
 import NotesTab       from './tabs/NotesTab'
 import FilesTab       from './tabs/FilesTab'
 
-const COLUMNS = ['Shortlisted', 'Applied', 'Interview', 'Offer', 'Rejected']
+const COLUMNS = ['Shortlisted', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived']
 const COL_COLORS = {
   Shortlisted: 'var(--col-shortlisted)', Applied: 'var(--col-applied)',
   Interview:   'var(--col-interview)',   Offer:   'var(--col-offer)',
-  Rejected:    'var(--col-rejected)',
+  Rejected:    'var(--col-rejected)',    Archived: 'var(--col-archived)',
 }
-const TABS = ['Overview', 'Job Description', 'Cover Letter', 'Chat', 'Notes', 'Files']
+const TABS = ['Overview', 'Cover Letter', 'Chat', 'Notes', 'Files']
 
 export default function CardDetail({ jobId, setRoute }) {
   const { jobs, setJobs } = useApp()
-  const [job, setJob]   = useState(null)
-  const [tab, setTab]   = useState('Overview')
+  const [job, setJob]         = useState(null)
+  const [tab, setTab]         = useState('Overview')
   const [chatCount, setChatCount] = useState(0)
   const [fileCount, setFileCount] = useState(0)
+  const [descFetching, setDescFetching] = useState(false)
+  const [descError,    setDescError]    = useState(null)
+
+  const fetchDescription = async (jobId) => {
+    setDescFetching(true)
+    setDescError(null)
+    try {
+      const res = await api.post(`/jobs/${jobId}/fetch-description`)
+      setJob(prev => ({ ...prev, description: res.description, logo_url: res.logoUrl || prev.logo_url }))
+    } catch (err) {
+      setDescError(err?.message || 'Could not fetch description')
+    }
+    setDescFetching(false)
+  }
 
   useEffect(() => {
     if (!jobId) return
     api.get(`/jobs/${jobId}`).then(data => {
       setJob(data)
       setFileCount(data.files?.length || 0)
+      if (!data.description && data.source_url) fetchDescription(jobId)
     }).catch(() => setRoute('board'))
 
     api.get(`/jobs/${jobId}/chat`).then(msgs => setChatCount(msgs.length)).catch(() => {})
@@ -62,6 +76,14 @@ export default function CardDetail({ jobId, setRoute }) {
         </div>
 
         <div>
+          {job.logo_url && (
+            <img
+              src={job.logo_url}
+              alt={job.company || ''}
+              style={{ maxWidth: 160, maxHeight: 80, width: 'auto', height: 'auto', objectFit: 'contain', marginBottom: 12, display: 'block' }}
+              onError={e => e.target.style.display = 'none'}
+            />
+          )}
           <div className="eyebrow" style={{ marginBottom: 10 }}>{job.status}</div>
           <h1 className="detail-h">{job.title}</h1>
           <div className="detail-company">{job.company}{job.location ? ` · ${job.location}` : ''}</div>
@@ -77,22 +99,20 @@ export default function CardDetail({ jobId, setRoute }) {
           <div><div className="k">Type</div><div className="v">{job.job_type || '—'}</div></div>
           <div style={{ gridColumn: '1/-1' }}>
             <div className="k">Category</div>
-            <div className="v" style={{ display: 'flex', gap: 4, marginTop: 2 }}>
-              {[['tech', 'Tech'], ['hospitality', 'Hosp.'], [null, 'General']].map(([val, lbl]) => (
-                <span
-                  key={String(val)}
-                  onClick={() => saveJob({ job_category: val })}
-                  style={{
-                    fontSize: 11, padding: '2px 8px', borderRadius: 4, cursor: 'pointer',
-                    fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
-                    background: job.job_category === val ? 'var(--accent)' : 'var(--bg-2)',
-                    color: job.job_category === val ? '#fff' : 'var(--ink-3)',
-                    border: `1px solid ${job.job_category === val ? 'var(--accent)' : 'var(--rule)'}`,
-                  }}
-                >
-                  {lbl}
-                </span>
-              ))}
+            <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>
+                {job.job_category === 'tech' ? 'Tech' : job.job_category === 'hospitality' ? 'Hospitality' : 'General'}
+              </span>
+              <select
+                className="input"
+                style={{ fontSize: 11, padding: '2px 6px', height: 'auto', width: 'auto' }}
+                value={job.job_category || ''}
+                onChange={e => saveJob({ job_category: e.target.value || null })}
+              >
+                <option value="tech">Tech</option>
+                <option value="hospitality">Hospitality</option>
+                <option value="">General</option>
+              </select>
             </div>
           </div>
           {job.salary && (
@@ -173,12 +193,11 @@ export default function CardDetail({ jobId, setRoute }) {
         </div>
 
         <div className="tab-body">
-          {tab === 'Overview'         && <OverviewTab    job={job} saveJob={saveJob} />}
-          {tab === 'Job Description'  && <JobDescTab     job={job} saveJob={saveJob} />}
-          {tab === 'Cover Letter'     && <CoverLetterTab job={job} saveJob={saveJob} />}
-          {tab === 'Chat'             && <ChatTab        job={job} onCountChange={setChatCount} />}
-          {tab === 'Notes'            && <NotesTab       job={job} saveJob={saveJob} />}
-          {tab === 'Files'            && <FilesTab       job={job} onCountChange={setFileCount} />}
+          {tab === 'Overview'     && <OverviewTab    job={job} saveJob={saveJob} descFetching={descFetching} descError={descError} onRefetchDesc={() => fetchDescription(job.id)} />}
+          {tab === 'Cover Letter' && <CoverLetterTab job={job} saveJob={saveJob} />}
+          {tab === 'Chat'         && <ChatTab        job={job} onCountChange={setChatCount} />}
+          {tab === 'Notes'        && <NotesTab       job={job} saveJob={saveJob} />}
+          {tab === 'Files'        && <FilesTab       job={job} onCountChange={setFileCount} />}
         </div>
       </div>
     </div>

@@ -68,11 +68,21 @@ export default function JobCard({ job, colVar, kcStyle, srcColors, onClick, isDr
       )}
 
       <div className="kc-top">
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <b>{job.title}</b>
           <div className="company">{job.company}{job.location ? ` · ${job.location}` : ''}</div>
         </div>
-        {job.fit_score != null && <Fit value={job.fit_score} />}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          {job.logo_url && (
+            <img
+              src={job.logo_url}
+              alt=""
+              style={{ width: 77, height: 77, objectFit: 'contain' }}
+              onError={e => e.target.style.display = 'none'}
+            />
+          )}
+          {job.fit_score != null && <Fit value={job.fit_score} />}
+        </div>
       </div>
 
       {(job.source || job.job_category) && (

@@ -18,7 +18,7 @@ function runHousekeeping(trigger = 'AUTO') {
   // 1. Archive expired jobs
   const expired = db.prepare(`
     SELECT * FROM jobs
-    WHERE status != 'Rejected' AND is_soft_deleted = 0
+    WHERE status NOT IN ('Archived','Rejected') AND is_soft_deleted = 0
       AND expiry_date IS NOT NULL AND expiry_date != ''
       AND expiry_date < date('now')
   `).all();
@@ -28,7 +28,7 @@ function runHousekeeping(trigger = 'AUTO') {
       log({ type: 'housekeeping', trigger, action: 'FLAGGED-FOR-REVIEW', jobTitle: j.title, company: j.company, source: j.source, reason: 'Expired but has attachments' });
       continue;
     }
-    db.prepare("UPDATE jobs SET status = 'Rejected', updated_at = datetime('now') WHERE id = ?").run(j.id);
+    db.prepare("UPDATE jobs SET status = 'Archived', updated_at = datetime('now') WHERE id = ?").run(j.id);
     log({ type: 'housekeeping', trigger, action: 'ARCHIVED', jobTitle: j.title, company: j.company, source: j.source, reason: `Expired ${j.expiry_date}` });
     results.archived++;
   }
@@ -36,22 +36,22 @@ function runHousekeeping(trigger = 'AUTO') {
   // 2. Archive old jobs with no expiry
   const old = db.prepare(`
     SELECT * FROM jobs
-    WHERE status != 'Rejected' AND is_soft_deleted = 0
+    WHERE status NOT IN ('Archived','Rejected') AND is_soft_deleted = 0
       AND (expiry_date IS NULL OR expiry_date = '')
       AND created_at < datetime('now', '-' || ? || ' days')
   `).all(ageDays);
 
   for (const j of old) {
     if (hasAttachments(j)) continue;
-    db.prepare("UPDATE jobs SET status = 'Rejected', updated_at = datetime('now') WHERE id = ?").run(j.id);
+    db.prepare("UPDATE jobs SET status = 'Archived', updated_at = datetime('now') WHERE id = ?").run(j.id);
     log({ type: 'housekeeping', trigger, action: 'ARCHIVED', jobTitle: j.title, company: j.company, source: j.source, reason: `Older than ${ageDays} days` });
     results.archived++;
   }
 
-  // 3. Soft-delete Rejected jobs older than softDays
+  // 3. Soft-delete Archived and Rejected jobs older than softDays
   const toSoftDelete = db.prepare(`
     SELECT * FROM jobs
-    WHERE status = 'Rejected' AND is_soft_deleted = 0
+    WHERE status IN ('Archived','Rejected') AND is_soft_deleted = 0
       AND updated_at < datetime('now', '-' || ? || ' days')
   `).all(softDays);
 

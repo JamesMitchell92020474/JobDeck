@@ -9,8 +9,8 @@ export default function Sidebar({ route, setRoute }) {
   const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2)
 
   const nav = [
-    { id: 'dash',     label: 'Dashboard', icon: 'home'     },
-    { id: 'board',    label: 'Board',     icon: 'board',  badge: total },
+    { id: 'dash',     label: 'Home',      icon: 'home'     },
+    { id: 'board',    label: 'Job Board', icon: 'board',  badge: total },
     { id: 'chat',     label: 'Chat',      icon: 'chat'     },
     { id: 'settings', label: 'Settings',  icon: 'settings' },
   ]

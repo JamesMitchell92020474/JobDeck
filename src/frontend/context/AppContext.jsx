@@ -87,7 +87,7 @@ export function AppProvider({ children }) {
     catch { return {} }
   }
 
-  const columnCounts = ['Shortlisted', 'Applied', 'Interview', 'Offer', 'Rejected'].reduce((acc, col) => {
+  const columnCounts = ['Shortlisted', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived'].reduce((acc, col) => {
     acc[col] = jobs.filter(j => j.status === col && !j.is_soft_deleted).length
     return acc
   }, {})

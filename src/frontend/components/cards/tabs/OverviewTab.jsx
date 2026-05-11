@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import Icon from '../../ui/Icon'
 
-export default function OverviewTab({ job, saveJob }) {
+export default function OverviewTab({ job, saveJob, descFetching, descError, onRefetchDesc }) {
   const [deadline, setDeadline] = useState(job.deadline || '')
   const [saving, setSaving] = useState(false)
 
@@ -20,11 +21,36 @@ export default function OverviewTab({ job, saveJob }) {
       )}
 
       <div>
-        <div className="eyebrow" style={{ marginBottom: 8 }}>About this role</div>
-        <p className="serif" style={{ fontSize: 16, lineHeight: 1.7, color: 'var(--ink)', margin: 0, fontWeight: 300 }}>
-          {job.description?.slice(0, 600) || 'No description available.'}
-          {(job.description?.length || 0) > 600 && '…'}
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <div className="eyebrow">About this role</div>
+          {job.source_url && (
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ padding: '2px 6px', fontSize: 11, opacity: 0.6 }}
+              onClick={onRefetchDesc}
+              disabled={descFetching}
+              title="Re-fetch description from source"
+            >
+              {descFetching ? <span className="spinner" /> : <Icon name="refresh" size={10} />}
+            </button>
+          )}
+        </div>
+        {job.description ? (
+          /<[a-z][\s\S]*>/i.test(job.description)
+            ? <div className="job-desc-html" dangerouslySetInnerHTML={{ __html: job.description }} />
+            : <p className="serif" style={{ fontSize: 15, lineHeight: 1.75, color: 'var(--ink)', margin: 0, fontWeight: 300, whiteSpace: 'pre-wrap' }}>{job.description}</p>
+        ) : descError ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--col-rejected)' }}>Couldn't fetch description: {descError}</p>
+            <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }} onClick={onRefetchDesc}>
+              <Icon name="refresh" size={11} /> Retry
+            </button>
+          </div>
+        ) : (
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--ink-3)', fontStyle: 'italic' }}>
+            {descFetching ? 'Fetching description…' : job.source_url ? 'No description available.' : 'No description available.'}
+          </p>
+        )}
       </div>
 
       <div>

@@ -5,17 +5,20 @@ import {
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import KanbanColumn from './KanbanColumn'
 import JobCard from '../cards/JobCard'
+import AddJobModal from '../cards/AddJobModal'
 import { useApp } from '../../context/AppContext'
 import api from '../../hooks/useApi'
 
-const COLUMNS = ['Shortlisted', 'Applied', 'Interview', 'Offer', 'Rejected']
-const COL_VAR = { Shortlisted: 'shortlisted', Applied: 'applied', Interview: 'interview', Offer: 'offer', Rejected: 'rejected' }
+const COLUMNS = ['Shortlisted', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived']
+const COL_VAR = { Shortlisted: 'shortlisted', Applied: 'applied', Interview: 'interview', Offer: 'offer', Rejected: 'rejected', Archived: 'archived' }
 
 export default function KanbanBoard({ setRoute, setDetailJobId }) {
   const { jobs, setJobs, settings, getSourceColors } = useApp()
-  const [query,     setQuery]     = useState('')
-  const [srcFilter, setSrcFilter] = useState('All')
-  const [activeId,  setActiveId]  = useState(null)
+  const [query,       setQuery]       = useState('')
+  const [srcFilter,   setSrcFilter]   = useState('All')
+  const [catFilter,   setCatFilter]   = useState('All')
+  const [activeId,    setActiveId]    = useState(null)
+  const [addingToCol, setAddingToCol] = useState(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
   const kcStyle   = settings.card_style || 'edge'
@@ -27,7 +30,8 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
     const q = query.toLowerCase()
     const matchQ = !q || j.title?.toLowerCase().includes(q) || j.company?.toLowerCase().includes(q)
     const matchS = srcFilter === 'All' || j.source === srcFilter
-    return matchQ && matchS
+    const matchC = catFilter === 'All' || j.job_category === catFilter || (catFilter === 'general' && !j.job_category)
+    return matchQ && matchS && matchC
   })
 
   const handleDragStart = (e) => setActiveId(e.active.id)
@@ -35,8 +39,13 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
     const { active, over } = e
     setActiveId(null)
     if (!over) return
-    const newStatus = over.id
-    if (!COLUMNS.includes(newStatus)) return
+
+    // over.id is either a column name or a card id — resolve to column
+    let newStatus = COLUMNS.includes(over.id)
+      ? over.id
+      : jobs.find(j => j.id === over.id)?.status
+
+    if (!newStatus) return
     const job = jobs.find(j => j.id === active.id)
     if (!job || job.status === newStatus) return
 
@@ -70,6 +79,17 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
             </span>
           ))}
         </div>
+        <div className="filter-chips" style={{ borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
+          {[['All', 'All'], ['tech', 'Tech'], ['hospitality', 'Hospitality'], ['general', 'General']].map(([val, label]) => (
+            <span
+              key={val}
+              className={`filter-chip ${catFilter === val ? 'active' : ''}`}
+              onClick={() => setCatFilter(val)}
+            >
+              {label}
+            </span>
+          ))}
+        </div>
         <div className="flex-1" />
       </div>
 
@@ -82,7 +102,9 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
       >
         <div className="board">
           {COLUMNS.map(col => {
-            const colJobs = filtered.filter(j => j.status === col)
+            const colJobs = filtered
+              .filter(j => j.status === col)
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
             return (
               <SortableContext key={col} items={colJobs.map(j => j.id)} strategy={verticalListSortingStrategy}>
                 <KanbanColumn
@@ -92,6 +114,7 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
                   kcStyle={kcStyle}
                   srcColors={srcColors}
                   onCardClick={id => { setDetailJobId(id); setRoute('detail') }}
+                  onAddJob={col => setAddingToCol(col)}
                 />
               </SortableContext>
             )
@@ -104,6 +127,14 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
           )}
         </DragOverlay>
       </DndContext>
+
+      {addingToCol && (
+        <AddJobModal
+          initialStatus={addingToCol}
+          onSaved={job => { setJobs(prev => [...prev, job]); setAddingToCol(null) }}
+          onCancel={() => setAddingToCol(null)}
+        />
+      )}
     </div>
   )
 }

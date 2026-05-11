@@ -48,7 +48,8 @@ Return a JSON object with exactly these fields:
 {
   "fit_score": <integer 0-100>,
   "summary": "<2-3 sentence match summary>",
-  "skills_gaps": ["<gap 1>", "<gap 2>"]
+  "skills_gaps": ["<gap 1>", "<gap 2>"],
+  "deadline": "<closing/application date as written in the ad e.g. '30 May 2025', or null if not mentioned>"
 }
 Return only valid JSON, no markdown.`;
 

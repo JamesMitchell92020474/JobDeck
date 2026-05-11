@@ -93,6 +93,8 @@ export default function Settings() {
   const [syncing,   setSyncing]  = useState({})
   const [hkRunning, setHkRunning]= useState(false)
   const [hkResult,  setHkResult] = useState(null)
+  const [cleanupPreview, setCleanupPreview] = useState(null)
+  const [cleanupRunning, setCleanupRunning] = useState(false)
   const [logs,      setLogs]     = useState([])
   const [logsLoaded,setLogsLoaded]=useState(false)
   const cvRefs = { tech: useRef(null), hospitality: useRef(null) }
@@ -122,11 +124,13 @@ export default function Settings() {
   const syncSource = async (src) => {
     setSyncing(s => ({ ...s, [src]: true }))
     await api.post('/scrape', { sources: [src] }).catch(() => {})
+    await loadSettings()
     setSyncing(s => ({ ...s, [src]: false }))
   }
   const syncAll = async () => {
     setSyncing({ all: true })
     await api.post('/scrape', {}).catch(() => {})
+    await loadSettings()
     setSyncing({})
   }
   const runHousekeeping = async () => {
@@ -231,6 +235,106 @@ export default function Settings() {
 
       </div>
 
+      {/* Scraper preferences */}
+      <div className="set-group">
+        <h3>Scraper preferences</h3>
+        <div className="help">Keywords and location used when scraping job sites. Separate multiple keywords with commas.</div>
+        <div className="set-row">
+          <div className="lbl">Location<small>City or region to search in</small></div>
+          <input
+            className="input"
+            style={{ maxWidth: 240 }}
+            defaultValue={settings.scraper_location || 'Christchurch'}
+            onBlur={e => saveSetting('scraper_location', e.target.value)}
+          />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Max job age<small>Only pull jobs posted within this many days</small></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              className="input"
+              style={{ maxWidth: 80 }}
+              type="number"
+              min="1"
+              max="90"
+              defaultValue={settings.scraper_max_age_days || '30'}
+              onBlur={e => saveSetting('scraper_max_age_days', e.target.value)}
+            />
+            <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>days</span>
+          </div>
+        </div>
+        <div className="set-row">
+          <div className="lbl">Tech keywords<small>Used for IT / tech job searches</small></div>
+          <input
+            className="input"
+            style={{ maxWidth: 480 }}
+            defaultValue={settings.scraper_keywords_tech || 'front end developer, web developer, IT support, systems administrator, Microsoft 365, React, JavaScript, CRM'}
+            onBlur={e => saveSetting('scraper_keywords_tech', e.target.value)}
+          />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Hospitality keywords<small>Used for hospitality / retail searches</small></div>
+          <input
+            className="input"
+            style={{ maxWidth: 480 }}
+            defaultValue={settings.scraper_keywords_hospitality || 'customer service, barista, cafe, retail assistant, front of house, hospitality'}
+            onBlur={e => saveSetting('scraper_keywords_hospitality', e.target.value)}
+          />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Clean up board<small>Remove scraped jobs that don't match your keywords or location</small></div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            {!cleanupPreview ? (
+              <button
+                className="btn btn-sm"
+                onClick={async () => {
+                  setCleanupRunning(true)
+                  const res = await api.post('/housekeeping/cleanup-unmatched', { dryRun: true }).catch(() => null)
+                  setCleanupPreview(res)
+                  setCleanupRunning(false)
+                }}
+                disabled={cleanupRunning}
+              >
+                {cleanupRunning ? <span className="spinner" /> : null}
+                Preview clean up
+              </button>
+            ) : cleanupPreview.count === 0 ? (
+              <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>
+                All jobs already match your filters.{' '}
+                <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setCleanupPreview(null)}>Reset</span>
+              </span>
+            ) : (
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>
+                  {cleanupPreview.count} job{cleanupPreview.count !== 1 ? 's' : ''} will be removed
+                </span>
+                <button
+                  className="btn btn-sm"
+                  style={{ background: 'var(--col-rejected)', color: '#fff', borderColor: 'var(--col-rejected)' }}
+                  onClick={async () => {
+                    setCleanupRunning(true)
+                    await api.post('/housekeeping/cleanup-unmatched', { dryRun: false }).catch(() => null)
+                    setCleanupPreview(null)
+                    setCleanupRunning(false)
+                    await loadSettings()
+                  }}
+                  disabled={cleanupRunning}
+                >
+                  {cleanupRunning ? <span className="spinner" /> : null}
+                  Remove {cleanupPreview.count} jobs
+                </button>
+                <span
+                  style={{ fontSize: 13, color: 'var(--ink-3)', cursor: 'pointer', textDecoration: 'underline' }}
+                  onClick={() => setCleanupPreview(null)}
+                >
+                  Cancel
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Job sources */}
       <div className="set-group">
         <h3>Job sources</h3>
@@ -254,7 +358,11 @@ export default function Settings() {
                   <input type="color" value={color} onChange={e => setSrcColor(src, e.target.value)} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
                   <span className="mono" style={{ fontSize: 11 }}>{color.toUpperCase()}</span>
                 </label>
-                <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>—</div>
+                <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                  {settings[`last_sync_${src}`]
+                    ? new Date(settings[`last_sync_${src}`]).toLocaleString('en-NZ', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                    : '—'}
+                </div>
                 <button
                   className="btn btn-accent btn-sm"
                   onClick={() => syncSource(src)}
@@ -352,7 +460,7 @@ export default function Settings() {
             onBlur={e => saveSetting('hk_age_days', e.target.value)} />
         </div>
         <div className="set-row">
-          <div className="lbl">Soft-delete after<small>Days in Rejected before soft-deleting</small></div>
+          <div className="lbl">Soft-delete after<small>Days in Archived or Rejected before soft-deleting</small></div>
           <input className="input" style={{ maxWidth: 100 }} type="number" min={1}
             defaultValue={settings.hk_soft_days || '90'}
             onBlur={e => saveSetting('hk_soft_days', e.target.value)} />
