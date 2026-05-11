@@ -6,7 +6,7 @@ const router = express.Router();
 router.post('/', async (req, res) => {
   const { sources } = req.body;
   try {
-    const results = await runScrape(sources || ['Seek', 'Trade Me Jobs', 'Jora', 'Indeed']);
+    const results = await runScrape(sources || ['Seek', 'Trade Me Jobs']);
     res.json({ ok: true, results });
   } catch (e) {
     res.status(500).json({ error: e.message });

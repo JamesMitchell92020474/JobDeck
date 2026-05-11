@@ -2,7 +2,7 @@ import { useState } from 'react'
 import Icon from '../ui/Icon'
 import api from '../../hooks/useApi'
 
-const SOURCES    = ['Manual', 'Seek', 'Trade Me Jobs', 'LinkedIn', 'Jora', 'Indeed', 'Other']
+const SOURCES    = ['Manual', 'Seek', 'Trade Me Jobs', 'LinkedIn', 'Other']
 const JOB_TYPES  = ['', 'Full-time', 'Part-time', 'Contract', 'Casual', 'Internship']
 const CATEGORIES = [{ value: '', label: 'Auto-detect' }, { value: 'tech', label: 'Tech / IT' }, { value: 'hospitality', label: 'Hospitality / Retail' }]
 

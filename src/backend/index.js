@@ -27,6 +27,7 @@ app.use('/api/scrape',       require('./routes/scrape'));
 app.use('/api/housekeeping', require('./routes/housekeeping'));
 app.use('/api/export',       require('./routes/export'));
 app.use('/api/stats',        require('./routes/stats'));
+app.use('/api/news',         require('./routes/news'));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, ts: Date.now() }));
 

@@ -3,22 +3,16 @@ import { useApp } from '../context/AppContext'
 import Icon from '../components/ui/Icon'
 import api from '../hooks/useApi'
 
-const SOURCES = ['Seek', 'LinkedIn', 'Trade Me Jobs', 'Jora', 'Indeed']
+const SOURCES = ['Seek', 'Trade Me Jobs']
 
 const DEFAULT_SRC_COLORS = {
   'Seek':           '#FFC107',
-  'LinkedIn':       '#0D6EFD',
   'Trade Me Jobs':  '#DC3545',
-  'Jora':           '#198754',
-  'Indeed':         '#6E6B85',
 }
 
 const STALE_SRC_COLORS = {
   'Seek':           '#3D5A80',
-  'LinkedIn':       '#2867B2',
   'Trade Me Jobs':  '#2E7D5B',
-  'Jora':           '#A8743A',
-  'Indeed':         '#5C4A8A',
 }
 
 const FONT_CATALOGUE = {
@@ -89,7 +83,7 @@ function CoverLetterTemplate() {
 }
 
 export default function Settings() {
-  const { settings, saveSetting, loadSettings } = useApp()
+  const { settings, saveSetting, loadSettings, loadJobs } = useApp()
   const [syncing,   setSyncing]  = useState({})
   const [hkRunning, setHkRunning]= useState(false)
   const [hkResult,  setHkResult] = useState(null)
@@ -124,13 +118,13 @@ export default function Settings() {
   const syncSource = async (src) => {
     setSyncing(s => ({ ...s, [src]: true }))
     await api.post('/scrape', { sources: [src] }).catch(() => {})
-    await loadSettings()
+    await Promise.all([loadSettings(), loadJobs()])
     setSyncing(s => ({ ...s, [src]: false }))
   }
   const syncAll = async () => {
     setSyncing({ all: true })
     await api.post('/scrape', {}).catch(() => {})
-    await loadSettings()
+    await Promise.all([loadSettings(), loadJobs()])
     setSyncing({})
   }
   const runHousekeeping = async () => {
@@ -178,13 +172,6 @@ export default function Settings() {
                 </div>
               ))}
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12.5, color: 'var(--ink-2)' }}>
-              <span
-                className={`toggle ${settings.auto_theme === '1' ? 'on' : ''}`}
-                onClick={() => saveSetting('auto_theme', settings.auto_theme === '1' ? '0' : '1')}
-              />
-              Auto (7am–7pm)
-            </label>
           </div>
         </div>
 

@@ -1,6 +1,6 @@
 # JobDeck — Claude Code Context
 
-Personal job search dashboard for James Mitchell. NZ context (Seek, Trade Me Jobs, Jora, Indeed, LinkedIn).
+Personal job search dashboard for James Mitchell. NZ context (Seek, Trade Me Jobs).
 Tracks both tech/IT roles and hospitality/retail roles with separate CV profiles per category.
 
 ## GitHub
@@ -95,7 +95,7 @@ write to `document.documentElement` style/dataset.
 
 Card styles: `.kc` + `[data-kc-style="edge|bordered|minimal"]` on `.kanban-shell`.
 
-Theme is applied via `data-mode` attribute on `<html>` (NOT `data-theme`).
+Theme is applied via `data-mode` attribute on `<html>` (NOT `data-theme`). Manual only — no auto-toggle.
 Density via `data-density`. Both set in `AppContext.jsx`.
 
 Column colours (CSS vars):
@@ -108,7 +108,7 @@ Column colours (CSS vars):
 - `--col-rejected`    #6E6B85 (muted purple)
 
 Default source colours (stored as JSON in `source_colors` setting):
-- Seek `#FFC107` · LinkedIn `#0D6EFD` · Trade Me Jobs `#DC3545` · Jora `#198754` · Indeed `#6E6B85`
+- Seek `#FFC107` · Trade Me Jobs `#DC3545`
 
 ## AI models
 
@@ -154,6 +154,7 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | POST | /api/scrape | Trigger Playwright scrape |
 | POST | /api/housekeeping/run | Run housekeeping manually |
 | POST | /api/housekeeping/cleanup-unmatched | Remove scraped jobs not matching keywords+location (`{ dryRun: bool }`) |
+| GET | /api/news | Merged Hacker News (Algolia API) + Geekzone NZ headlines (30min cache, max 7 days old) |
 | GET | /api/logs | Activity log viewer |
 | POST | /api/export/backup | Create zip backup |
 | GET/PUT | /api/export/cover-letter-template | Cover letter template |
@@ -168,12 +169,12 @@ Order: New → Interested → Applied → Interview → Offer → Rejected → A
 - **Rejected** — applied and didn't get it (user-initiated only).
 - Housekeeping soft-deletes jobs in either Archived or Rejected after 90 days.
 
-### AI filter (New column)
+### AI filter
 
-"Filter" button in the New column header calls `POST /api/jobs/filter-new`:
+"Filter with AI" button appears in both the kanban toolbar and the dashboard quick-actions row. Calls `POST /api/jobs/filter-new`:
 1. Scores any unscored New jobs that have a fetched description
 2. Archives all New jobs with `fit_score < 40`
-3. Returns `{ archived, kept, scored }` — shown inline below the column header
+3. Returns `{ archived, kept, scored }` — shown as an inline result note next to the button
 
 ## Job categories
 
@@ -188,11 +189,24 @@ Jobs are auto-tagged on creation (POST /api/jobs and scraper inserts) via `src/b
 Category shown as label + dropdown selector in card detail aside.
 Board has category filter chips: All / Tech / Hospitality / General.
 
+## Dashboard
+
+Layout (top to bottom):
+1. **Welcome** — greeting + AI-generated welcome message (`GET /api/stats/welcome`)
+2. **Stat strip** — compact single-row pipeline counts, clickable to board
+3. **Quick actions** — Sync Sources · Filter with AI · Add Job (right-aligned)
+4. **grid-3 (2:1)** — New listings (up to 8, sorted by fit score desc) | News feed
+5. **grid-2** — Weekly activity chart | Sources donut
+6. **Deadlines** — only rendered when jobs have deadlines set
+
+New listings sorts by `fit_score DESC` (scored jobs first), then `created_at DESC` for unscored.
+News feed auto-refreshes every 30 minutes via `setInterval`.
+
 ## Scraping
 
 Playwright scrapers in `src/backend/services/scraper.js`.
 Run `npx playwright install chromium` before using.
-LinkedIn: manual import only (no scraping).
+LinkedIn: manual add only (no scraping). Jora and Indeed removed — low NZ value/overlap.
 Cron schedule: `src/backend/cron.js` — daily scrape 7:00 NZST, housekeeping 2:00 NZST.
 
 Scraper reads `scraper_location`, `scraper_keywords_tech`, `scraper_keywords_hospitality`, `scraper_max_age_days` from settings to build search URLs. Seek uses `daterange` param for age filtering. Saves `last_sync_{source}` setting on completion.
@@ -269,5 +283,5 @@ ACCENT_COLOR=#423A8E
 - James Mitchell · hello@jamesmitchell.co.nz · Christchurch, NZ
 - Graphic design + frontend dev background — UI quality matters
 - NZ context: Xero, Sharesies, Hnry, Auror, Tracksuit, Cin7 are realistic companies
-- Sources: Seek, Trade Me Jobs, LinkedIn (manual only), Jora, Indeed
+- Sources: Seek, Trade Me Jobs (scraped) · LinkedIn (manual add only, not scraped)
 - Default fonts: Cambria (display) + Inter (body)

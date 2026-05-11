@@ -13,8 +13,7 @@ const DEFAULT_SETTINGS = {
   display_name: 'James Mitchell',
   email: 'james@mitchell.nz',
   source_colors: JSON.stringify({
-    Seek: '#3D5A80', LinkedIn: '#2867B2',
-    'Trade Me Jobs': '#2E7D5B', Jora: '#A8743A', Indeed: '#5C4A8A',
+    Seek: '#3D5A80', 'Trade Me Jobs': '#2E7D5B',
   }),
   disabled_sources: '{}',
 }
@@ -54,13 +53,7 @@ export function AppProvider({ children }) {
   // Apply theme tokens to DOM
   useEffect(() => {
     const html = document.documentElement
-    const autoTheme = settings.auto_theme === '1'
-    let mode = settings.theme || 'light'
-    if (autoTheme) {
-      const h = new Date().getHours()
-      mode = (h >= 7 && h < 19) ? 'light' : 'dark'
-    }
-    html.dataset.mode = mode
+    html.dataset.mode = settings.theme || 'light'
     html.dataset.density = settings.density || 'balanced'
 
     const accent = settings.accent_color || '#423A8E'

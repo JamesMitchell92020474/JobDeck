@@ -41,10 +41,8 @@ function getDb() {
     density:         'balanced',
     source_colors:   JSON.stringify({
       Seek:           '#FFC107',
-      LinkedIn:       '#0D6EFD',
+
       'Trade Me Jobs':'#DC3545',
-      Jora:           '#198754',
-      Indeed:         '#6E6B85',
     }),
     disabled_sources: JSON.stringify({}),
     hk_age_days:    '30',
@@ -53,7 +51,6 @@ function getDb() {
     low_disk_gb:    process.env.LOW_DISK_WARNING_GB || '2',
     api_key:        '',
     deep_analysis:  '0',
-    auto_theme:     '0',
   };
 
   const upsert = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');

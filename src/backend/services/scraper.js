@@ -168,40 +168,49 @@ async function scrapeSeek() {
   }
 }
 
-async function scrapeTradeMe() {
-  const location = getSetting('scraper_location') || 'Christchurch';
-  const techKw   = getSetting('scraper_keywords_tech') || '';
-  const hospKw   = getSetting('scraper_keywords_hospitality') || '';
-  const allKw    = [...new Set([
-    ...techKw.split(',').map(k => k.trim()).filter(Boolean).slice(0, 3),
-    ...hospKw.split(',').map(k => k.trim()).filter(Boolean).slice(0, 3),
-  ])];
-  const searchQuery = allKw.length ? allKw[0] : '';
-  const url = searchQuery
-    ? `https://www.trademe.co.nz/a/jobs?search_string=${encodeURIComponent(searchQuery)}&region=${encodeURIComponent(location)}`
-    : 'https://www.trademe.co.nz/a/jobs';
+// Trade Me Jobs region IDs (alphabetical NZ regions)
+function buildTradeMeRegion(location) {
+  const map = {
+    christchurch: 3,  // Canterbury
+    auckland:     1,
+    wellington:   14,
+    hamilton:     13, // Waikato
+    tauranga:     2,  // Bay of Plenty
+    dunedin:      10, // Otago
+  };
+  return map[(location || '').toLowerCase().trim()] || 3;
+}
 
-  const { browser, context } = await launchBrowser();
+function buildTradeMeUrls(keywords, location) {
+  const region = buildTradeMeRegion(location);
+  if (!keywords) return [`https://www.trademe.co.nz/a/jobs/search?region=${region}`];
+  return keywords.split(',').map(k => k.trim()).filter(Boolean).slice(0, 5).map(k =>
+    `https://www.trademe.co.nz/a/jobs/search?search_string=${encodeURIComponent(k)}&region=${region}`
+  );
+}
+
+async function scrapeTradeMeUrl(context, url) {
   const page = await context.newPage();
+  log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-START', source: 'Trade Me Jobs', reason: url });
   try {
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+    await page.waitForTimeout(2000);
 
     const cardSel = await Promise.race([
-      page.waitForSelector('.tm-jobs-search-card', { timeout: 8000 }).then(() => '.tm-jobs-search-card').catch(() => null),
+      page.waitForSelector('tm-jobs-search-card', { timeout: 8000 }).then(() => 'tm-jobs-search-card').catch(() => null),
       page.waitForSelector('[data-testid="job-card"]', { timeout: 8000 }).then(() => '[data-testid="job-card"]').catch(() => null),
+      page.waitForSelector('[class*="tm-jobs-search-card"]', { timeout: 8000 }).then(() => '[class*="tm-jobs-search-card"]').catch(() => null),
       page.waitForSelector('tm-job-listing', { timeout: 8000 }).then(() => 'tm-job-listing').catch(() => null),
     ]);
 
     if (!cardSel) {
-      log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-WARN', source: 'Trade Me Jobs', reason: 'No job cards found' });
+      log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-WARN', source: 'Trade Me Jobs', reason: `No job cards found at ${url}` });
       return [];
     }
 
-    const jobs = await page.evaluate((sel) => {
-      const titleSels    = ['.tm-jobs-search-card__title', '[class*="title"]', 'h2', 'h3'];
-      const companySels  = ['.tm-jobs-search-card__subtitle', '[class*="company"]', '[class*="employer"]'];
-      const locationSels = ['.tm-jobs-search-card__location', '[class*="location"]', '[class*="region"]'];
+    log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-INFO', source: 'Trade Me Jobs', reason: `Selector matched: ${cardSel}` });
 
+    const jobs = await page.evaluate((sel) => {
       const pick = (el, sels) => {
         for (const s of sels) {
           const found = el.querySelector(s);
@@ -210,121 +219,79 @@ async function scrapeTradeMe() {
         return '';
       };
 
+      const titleSels    = ['[class*="title"]', 'h2', 'h3', 'strong'];
+      const companySels  = ['[class*="company"]', '[class*="employer"]', '[class*="advertiser"]', '[class*="subtitle"]'];
+      const locationSels = ['[class*="location"]', '[class*="region"]', '[class*="suburb"]'];
+      const typeSels     = ['[class*="job-type"]', '[class*="work-type"]', '[class*="employment"]'];
+      const dateSels     = ['time[datetime]', 'time', '[class*="date"]', '[class*="listed"]'];
+
+      function resolvePostedDate(el) {
+        if (!el) return '';
+        const iso = el.getAttribute && el.getAttribute('datetime');
+        if (iso) {
+          const d = new Date(iso);
+          if (!isNaN(d)) {
+            const now = new Date();
+            return d.toLocaleDateString('en-NZ', {
+              day: 'numeric', month: 'short',
+              year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+            });
+          }
+        }
+        const txt = el.textContent.trim();
+        const dMatch = txt.match(/^(\d+)\s*d(?:ays?)?\s+ago/i);
+        if (dMatch) {
+          const d = new Date(); d.setDate(d.getDate() - parseInt(dMatch[1]));
+          return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+        }
+        if (txt.match(/^(\d+)\s*h(?:ours?)?\s+ago/i)) {
+          return new Date().toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+        }
+        return txt;
+      }
+
       return [...document.querySelectorAll(sel)].slice(0, 25).map(c => ({
-        title:    pick(c, titleSels),
-        company:  pick(c, companySels),
-        location: pick(c, locationSels),
-        url:      c.querySelector('a')?.href || '',
+        title:        pick(c, titleSels),
+        company:      pick(c, companySels),
+        location:     pick(c, locationSels),
+        url:          c.querySelector('a[href*="/jobs/"]')?.href || c.querySelector('a')?.href || '',
+        job_type:     pick(c, typeSels),
+        posting_date: resolvePostedDate(c.querySelector(dateSels.find(s => c.querySelector(s)) || dateSels[0])),
       })).filter(j => j.title);
     }, cardSel);
 
-    return jobs.map(j => ({ ...j, source: 'Trade Me Jobs' }));
-  } catch (err) {
-    log({ type: 'scraper', trigger: 'AUTO', action: 'SCRAPE-ERROR', source: 'Trade Me Jobs', reason: err.message });
-    return [];
+    log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-INFO', source: 'Trade Me Jobs', reason: `Found ${jobs.length} jobs at ${url}` });
+    return jobs;
   } finally {
     await page.close();
-    await browser.close();
   }
 }
 
-async function scrapeJora() {
+async function scrapeTradeMe() {
   const location = getSetting('scraper_location') || 'Christchurch';
   const techKw   = getSetting('scraper_keywords_tech') || '';
   const hospKw   = getSetting('scraper_keywords_hospitality') || '';
-  const kw = (techKw + ',' + hospKw).split(',').map(k => k.trim()).filter(Boolean)[0] || '';
-  const url = `https://nz.jora.com/jobs?q=${encodeURIComponent(kw)}&l=${encodeURIComponent(location)}`;
 
   const { browser, context } = await launchBrowser();
-  const page = await context.newPage();
   try {
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
-
-    const cardSel = await Promise.race([
-      page.waitForSelector('article.job-card', { timeout: 8000 }).then(() => 'article.job-card').catch(() => null),
-      page.waitForSelector('[data-automation="jobCard"]', { timeout: 8000 }).then(() => '[data-automation="jobCard"]').catch(() => null),
-      page.waitForSelector('.job-card', { timeout: 8000 }).then(() => '.job-card').catch(() => null),
-    ]);
-
-    if (!cardSel) {
-      log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-WARN', source: 'Jora', reason: 'No job cards found' });
-      return [];
+    const urls = [
+      ...buildTradeMeUrls(techKw, location),
+      ...buildTradeMeUrls(hospKw, location),
+    ];
+    const all = [];
+    for (const url of urls) {
+      const jobs = await scrapeTradeMeUrl(context, url).catch(err => {
+        log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-ERROR', source: 'Trade Me Jobs', reason: err.message });
+        return [];
+      });
+      all.push(...jobs);
     }
-
-    const jobs = await page.evaluate((sel) => {
-      const pick = (el, sels) => {
-        for (const s of sels) {
-          const found = el.querySelector(s);
-          if (found?.textContent?.trim()) return found.textContent.trim();
-        }
-        return '';
-      };
-      return [...document.querySelectorAll(sel)].slice(0, 25).map(c => ({
-        title:    pick(c, ['[class*="title"]', 'h2', 'h3', 'a']),
-        company:  pick(c, ['[class*="company"]', '[class*="employer"]', '[class*="advertiser"]']),
-        location: pick(c, ['[class*="location"]', '[class*="suburb"]']),
-        url:      c.querySelector('a')?.href || '',
-      })).filter(j => j.title);
-    }, cardSel);
-
-    return jobs.map(j => ({ ...j, source: 'Jora' }));
-  } catch (err) {
-    log({ type: 'scraper', trigger: 'AUTO', action: 'SCRAPE-ERROR', source: 'Jora', reason: err.message });
-    return [];
+    return all.map(j => ({ ...j, source: 'Trade Me Jobs' }));
   } finally {
-    await page.close();
     await browser.close();
   }
 }
 
-async function scrapeIndeed() {
-  const location = getSetting('scraper_location') || 'Christchurch';
-  const techKw   = getSetting('scraper_keywords_tech') || '';
-  const hospKw   = getSetting('scraper_keywords_hospitality') || '';
-  const kw = (techKw + ',' + hospKw).split(',').map(k => k.trim()).filter(Boolean)[0] || '';
-  const url = `https://nz.indeed.com/jobs?q=${encodeURIComponent(kw)}&l=${encodeURIComponent(location)}`;
-
-  const { browser, context } = await launchBrowser();
-  const page = await context.newPage();
-  try {
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
-
-    const cardSel = await Promise.race([
-      page.waitForSelector('.job_seen_beacon', { timeout: 8000 }).then(() => '.job_seen_beacon').catch(() => null),
-      page.waitForSelector('[data-jk]', { timeout: 8000 }).then(() => '[data-jk]').catch(() => null),
-      page.waitForSelector('.jobsearch-ResultsList li', { timeout: 8000 }).then(() => '.jobsearch-ResultsList li').catch(() => null),
-    ]);
-
-    if (!cardSel) {
-      log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-WARN', source: 'Indeed', reason: 'No job cards found' });
-      return [];
-    }
-
-    const jobs = await page.evaluate((sel) => {
-      const pick = (el, sels) => {
-        for (const s of sels) {
-          const found = el.querySelector(s);
-          if (found?.textContent?.trim()) return found.textContent.trim();
-        }
-        return '';
-      };
-      return [...document.querySelectorAll(sel)].slice(0, 25).map(c => ({
-        title:    pick(c, ['[data-testid="jobsearch-JobInfoHeader-title"]', '.jobTitle a', 'h2 a', 'h2']),
-        company:  pick(c, ['[data-testid="company-name"]', '.companyName', '[class*="company"]']),
-        location: pick(c, ['[data-testid="text-location"]', '.companyLocation', '[class*="location"]']),
-        url:      c.querySelector('a[id^="job_"]')?.href || c.querySelector('a')?.href || '',
-      })).filter(j => j.title);
-    }, cardSel);
-
-    return jobs.map(j => ({ ...j, source: 'Indeed' }));
-  } catch (err) {
-    log({ type: 'scraper', trigger: 'AUTO', action: 'SCRAPE-ERROR', source: 'Indeed', reason: err.message });
-    return [];
-  } finally {
-    await page.close();
-    await browser.close();
-  }
-}
 
 function saveJobsToDB(jobs) {
   const db = getDb();
@@ -353,11 +320,11 @@ function saveJobsToDB(jobs) {
   return saved;
 }
 
-async function runScrape(sources = ['Seek', 'Trade Me Jobs', 'Jora', 'Indeed']) {
+async function runScrape(sources = ['Seek', 'Trade Me Jobs']) {
   const disabledStr = getSetting('disabled_sources') || '{}';
   const disabled = JSON.parse(disabledStr);
 
-  const scrapers = { Seek: scrapeSeek, 'Trade Me Jobs': scrapeTradeMe, Jora: scrapeJora, Indeed: scrapeIndeed };
+  const scrapers = { Seek: scrapeSeek, 'Trade Me Jobs': scrapeTradeMe };
   const results = {};
 
   for (const src of sources) {

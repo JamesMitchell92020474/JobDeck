@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import { Fit, Pill } from '../components/ui/FitScore'
 import Icon from '../components/ui/Icon'
@@ -30,14 +30,12 @@ function LineChart({ data, maxVal }) {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', overflow: 'visible' }}>
-      {/* Grid lines */}
       {[0, 0.5, 1].map(f => (
         <line key={f} x1={PAD.l} x2={W - PAD.r} y1={PAD.t + iH * (1 - f)} y2={PAD.t + iH * (1 - f)}
           stroke="var(--rule)" strokeWidth="1" strokeDasharray={f === 0 ? 'none' : '3 3'} />
       ))}
       {polyline('listings',     'var(--accent)')}
       {polyline('applications', 'var(--col-offer)')}
-      {/* X axis labels */}
       {data.map((d, i) => (
         <text key={i} x={xPos(i)} y={H - 4} textAnchor="middle" fontSize="10.5"
           fill="var(--ink-3)" fontFamily="var(--font-body)">{d.day}</text>
@@ -48,23 +46,78 @@ function LineChart({ data, maxVal }) {
 
 const COLUMNS = ['New', 'Interested', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived']
 
-export default function Dashboard({ setRoute, setDetailJobId }) {
-  const { jobs, getSourceColors } = useApp()
-  const [welcome, setWelcome]   = useState('')
-  const [statsData, setStats]   = useState(null)
+export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
+  const { jobs, setJobs, loadJobs, getSourceColors } = useApp()
+  const [welcome,        setWelcome]        = useState('')
+  const [statsData,      setStats]          = useState(null)
   const [loadingWelcome, setLoadingWelcome] = useState(true)
+  const [news,           setNews]           = useState([])
+  const [syncing,        setSyncing]        = useState(false)
+  const [syncResult,     setSyncResult]     = useState(null)
+  const [filtering,      setFiltering]      = useState(false)
+  const [filterResult,   setFilterResult]   = useState(null)
+  const newsTimer = useRef(null)
+
+  function timeAgo(iso) {
+    const diff = Date.now() - new Date(iso).getTime()
+    const m = Math.floor(diff / 60000)
+    if (m < 60) return `${m}m ago`
+    const h = Math.floor(m / 60)
+    if (h < 24) return `${h}h ago`
+    return `${Math.floor(h / 24)}d ago`
+  }
+
+  const loadNews = () => api.get('/news').then(setNews).catch(() => {})
 
   useEffect(() => {
     api.get('/stats').then(setStats).catch(() => {})
     api.get('/stats/welcome').then(d => setWelcome(d.message)).catch(() => {
       setWelcome('Welcome back. You have jobs to review today.')
     }).finally(() => setLoadingWelcome(false))
+    loadNews()
+    newsTimer.current = setInterval(loadNews, 30 * 60 * 1000)
+    return () => clearInterval(newsTimer.current)
   }, [])
+
+  const handleSync = async () => {
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await api.post('/scrape', {})
+      const total = Object.values(res.results || {}).reduce((s, r) => s + (r.new || 0), 0)
+      setSyncResult(total)
+      await loadJobs()
+      api.get('/stats').then(setStats).catch(() => {})
+    } catch {}
+    finally { setSyncing(false) }
+  }
+
+  const handleFilter = async () => {
+    setFiltering(true)
+    setFilterResult(null)
+    try {
+      const result = await api.post('/jobs/filter-new', { threshold: 40 })
+      const archivedIds = new Set(result.archived.map(j => j.id))
+      setJobs(prev => prev.map(j => archivedIds.has(j.id) ? { ...j, status: 'Archived' } : j))
+      setFilterResult({ archived: result.archived.length, kept: result.kept })
+    } catch {}
+    finally { setFiltering(false) }
+  }
 
   const activeJobs = jobs.filter(j => !j.is_soft_deleted)
   const counts = COLUMNS.reduce((acc, c) => { acc[c] = activeJobs.filter(j => j.status === c).length; return acc }, {})
-  const newJobs = activeJobs.filter(j => j.status === 'New').slice(0, 4)
-  const deadlines   = activeJobs
+
+  const newJobs = activeJobs
+    .filter(j => j.status === 'New')
+    .sort((a, b) => {
+      if (b.fit_score != null && a.fit_score != null) return b.fit_score - a.fit_score
+      if (b.fit_score != null) return 1
+      if (a.fit_score != null) return -1
+      return new Date(b.created_at) - new Date(a.created_at)
+    })
+    .slice(0, 8)
+
+  const deadlines = activeJobs
     .filter(j => j.deadline && j.deadline !== '—')
     .sort((a, b) => a.deadline?.localeCompare(b.deadline))
     .slice(0, 4)
@@ -75,9 +128,9 @@ export default function Dashboard({ setRoute, setDetailJobId }) {
   })
   const maxAct = Math.max(...activity.map(a => Math.max(a.listings || 0, a.applications || 0)), 1)
 
-  const sources    = statsData?.sources || []
-  const totalSrc   = sources.reduce((s, r) => s + r.n, 0) || 1
-  const srcColors  = getSourceColors()
+  const sources   = statsData?.sources || []
+  const totalSrc  = sources.reduce((s, r) => s + r.n, 0) || 1
+  const srcColors = getSourceColors()
   let pct = 0
   const stops = sources.map(s => {
     const start = pct; pct += (s.n / totalSrc) * 100
@@ -87,11 +140,6 @@ export default function Dashboard({ setRoute, setDetailJobId }) {
   const hour   = new Date().getHours()
   const greet  = hour < 5 ? "You're up early" : hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
   const dayStr = new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' })
-
-  const pipeDeltas = {
-    New: statsData?.recent ? `+${statsData.recent} today` : '—',
-    Interested: '—', Applied: '—', Interview: '—', Offer: '—', Rejected: '—', Archived: '—',
-  }
 
   return (
     <div className="dash">
@@ -111,18 +159,106 @@ export default function Dashboard({ setRoute, setDetailJobId }) {
         </h1>
       </div>
 
-      {/* Pipeline strip */}
-      <div className="pipeline">
-        {COLUMNS.map(c => (
-          <div key={c} className="pipe-cell" onClick={() => setRoute('board')}>
-            <div className="pipe-label">{c}</div>
-            <div className="pipe-num">{counts[c]}</div>
-            <div className="pipe-delta">{pipeDeltas[c]}</div>
+      {/* Stat strip */}
+      <div className="stat-strip" onClick={() => setRoute('board')}>
+        {COLUMNS.map((c, i) => (
+          <div key={c} className="stat-pill">
+            {i > 0 && <span className="stat-sep" />}
+            <span className="stat-dot" style={{ background: `var(--col-${c.toLowerCase()})` }} />
+            <span className="stat-num">{counts[c]}</span>
+            <span className="stat-label">{c}</span>
+            {c === 'New' && statsData?.recent > 0 && (
+              <span className="stat-delta">+{statsData.recent} today</span>
+            )}
           </div>
         ))}
       </div>
 
-      {/* Charts row */}
+      {/* Quick actions */}
+      <div className="dash-actions">
+        <button className="btn btn-ghost btn-sm" onClick={handleSync} disabled={syncing}>
+          {syncing
+            ? <span className="spinner" style={{ width: 11, height: 11 }} />
+            : <Icon name="refresh" size={12} />}
+          {syncing ? 'Syncing…' : 'Sync sources'}
+        </button>
+        {syncResult != null && (
+          <span className="dash-action-note">{syncResult > 0 ? `+${syncResult} new` : 'Up to date'}</span>
+        )}
+        <button className="btn-ai-filter dash-ai-btn" onClick={handleFilter} disabled={filtering}>
+          {filtering
+            ? <span className="spinner" style={{ width: 11, height: 11, borderColor: 'rgba(255,255,255,.35)', borderTopColor: '#fff' }} />
+            : <Icon name="wand" size={12} />}
+          {filtering ? 'Filtering…' : 'Filter with AI'}
+        </button>
+        {filterResult && (
+          <span className="dash-action-note">Archived {filterResult.archived} · kept {filterResult.kept}</span>
+        )}
+        <div style={{ flex: 1 }} />
+        <button className="btn btn-ghost btn-sm" onClick={onNewJob}>
+          <Icon name="plus" size={12} /> Add job
+        </button>
+      </div>
+
+      {/* Latest New + News */}
+      <div className="grid-3">
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <div className="eyebrow" style={{ marginBottom: 6 }}>New listings</div>
+              <div className="card-title">{counts['New']} unreviewed{newJobs.some(j => j.fit_score != null) ? ' · sorted by fit' : ''}</div>
+            </div>
+            <span className="btn btn-ghost btn-sm" onClick={() => setRoute('board')}>
+              View all <Icon name="external" size={11} />
+            </span>
+          </div>
+          {newJobs.length > 0 ? (
+            <div className="jobs-strip">
+              {newJobs.map(j => (
+                <div key={j.id} className="job-mini" onClick={() => { setDetailJobId(j.id); setRoute('detail') }}>
+                  <div className="job-mini-top">
+                    <div>
+                      <b>{j.title}</b>
+                      <div className="meta">{j.company}{j.location ? ` · ${j.location}` : ''}</div>
+                    </div>
+                    {j.fit_score != null && <Fit value={j.fit_score} />}
+                  </div>
+                  <div className="tags">
+                    <Pill>{j.source}</Pill>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ color: 'var(--ink-3)', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>
+              No new listings — sync a source or add a job manually.
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <div className="eyebrow">News</div>
+          </div>
+          {news.length > 0 ? (
+            <div className="news-feed">
+              {news.map((item, i) => (
+                <a key={i} className="news-item" href={item.url} target="_blank" rel="noopener noreferrer">
+                  <span className={`news-source news-source--${item.source === 'Hacker News' ? 'hn' : 'gz'}`}>
+                    {item.source === 'Hacker News' ? 'HN' : 'GZ'}
+                  </span>
+                  <span className="news-title">{item.title}</span>
+                  <span className="news-time">{timeAgo(item.published_at)}</span>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <div style={{ color: 'var(--ink-3)', fontSize: 13, padding: '16px 0' }}>Loading news…</div>
+          )}
+        </div>
+      </div>
+
+      {/* Charts */}
       <div className="grid-2">
         <div className="card">
           <div className="card-head">
@@ -172,42 +308,8 @@ export default function Dashboard({ setRoute, setDetailJobId }) {
         </div>
       </div>
 
-      {/* Latest + Deadlines */}
-      <div className="grid-3">
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <div className="eyebrow" style={{ marginBottom: 6 }}>Latest new</div>
-              <div className="card-title">{newJobs.length} unreviewed listings</div>
-            </div>
-            <span className="btn btn-ghost btn-sm" onClick={() => setRoute('board')}>
-              View all <Icon name="external" size={11} />
-            </span>
-          </div>
-          {newJobs.length > 0 ? (
-            <div className="jobs-strip">
-              {newJobs.map(j => (
-                <div key={j.id} className="job-mini" onClick={() => { setDetailJobId(j.id); setRoute('detail') }}>
-                  <div className="job-mini-top">
-                    <div>
-                      <b>{j.title}</b>
-                      <div className="meta">{j.company}{j.location ? ` · ${j.location}` : ''}</div>
-                    </div>
-                    {j.fit_score != null && <Fit value={j.fit_score} />}
-                  </div>
-                  <div className="tags">
-                    <Pill>{j.source}</Pill>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ color: 'var(--ink-3)', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>
-              No new listings — sync a source or add a job manually.
-            </div>
-          )}
-        </div>
-
+      {/* Deadlines — only shown when relevant */}
+      {deadlines.length > 0 && (
         <div className="card">
           <div className="card-head">
             <div>
@@ -215,32 +317,26 @@ export default function Dashboard({ setRoute, setDetailJobId }) {
               <div className="card-title">Deadlines</div>
             </div>
           </div>
-          {deadlines.length > 0 ? (
-            <div className="deadlines">
-              {deadlines.map(d => {
-                const parts = (d.deadline || '').split(' ')
-                return (
-                  <div key={d.id} className="deadline-row" onClick={() => { setDetailJobId(d.id); setRoute('detail') }}>
-                    <div className="deadline-date">
-                      <b>{parts[1] || parts[0]}</b>
-                      <span>{parts[0]}</span>
-                    </div>
-                    <div className="deadline-mid">
-                      <b>{d.title}</b>
-                      <span>{d.company} · {d.status}</span>
-                    </div>
-                    {d.fit_score != null && <Fit value={d.fit_score} />}
+          <div className="deadlines">
+            {deadlines.map(d => {
+              const parts = (d.deadline || '').split(' ')
+              return (
+                <div key={d.id} className="deadline-row" onClick={() => { setDetailJobId(d.id); setRoute('detail') }}>
+                  <div className="deadline-date">
+                    <b>{parts[1] || parts[0]}</b>
+                    <span>{parts[0]}</span>
                   </div>
-                )
-              })}
-            </div>
-          ) : (
-            <div style={{ color: 'var(--ink-3)', fontSize: 13, padding: '24px 0' }}>
-              No deadlines set.
-            </div>
-          )}
+                  <div className="deadline-mid">
+                    <b>{d.title}</b>
+                    <span>{d.company} · {d.status}</span>
+                  </div>
+                  {d.fit_score != null && <Fit value={d.fit_score} />}
+                </div>
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       <div style={{ height: 12 }} />
     </div>
