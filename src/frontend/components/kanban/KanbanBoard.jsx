@@ -19,6 +19,8 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
   const [srcFilter,   setSrcFilter]   = useState('All')
   const [catFilter,   setCatFilter]   = useState('All')
   const [typeFilter,  setTypeFilter]  = useState('All')
+  const [sortBy,      setSortBy]      = useState('added')
+  const [sortDir,     setSortDir]     = useState('desc')
   const [activeId,      setActiveId]      = useState(null)
   const [addingToCol,   setAddingToCol]   = useState(null)
   const [filteringNew,  setFilteringNew]  = useState(false)
@@ -26,10 +28,9 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
   const kcStyle   = settings.card_style || 'edge'
-  const srcColors = getSourceColors()
-  const sources   = ['All', ...Object.keys(srcColors)]
-
+  const srcColors  = getSourceColors()
   const activeJobs = jobs.filter(j => !j.is_soft_deleted)
+  const sources    = ['All', ...[...new Set(activeJobs.map(j => j.source).filter(Boolean))]]
   const TYPE_ORDER = ['Full time', 'Part time', 'Contract/Temp', 'Casual', 'Internship']
   const jobTypes   = ['All', ...TYPE_ORDER.filter(t => activeJobs.some(j => j.job_type === t))]
   const filtered   = activeJobs.filter(j => {
@@ -74,6 +75,49 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
 
   const activeJob = activeId ? jobs.find(j => j.id === activeId) : null
 
+  const SORT_OPTIONS = [
+    { value: 'title',    label: 'Title' },
+    { value: 'company',  label: 'Company' },
+    { value: 'added',    label: 'Date added' },
+    { value: 'posted',   label: 'Date posted' },
+    { value: 'deadline', label: 'Deadline' },
+    { value: 'score',    label: 'Score' },
+  ]
+
+  function sortJobs(a, b) {
+    const d = sortDir === 'desc' ? -1 : 1
+    switch (sortBy) {
+      case 'score': {
+        if (a.fit_score != null && b.fit_score != null) return (b.fit_score - a.fit_score) * d
+        if (a.fit_score != null) return -1
+        if (b.fit_score != null) return 1
+        return new Date(b.created_at) - new Date(a.created_at)
+      }
+      case 'posted': {
+        const pa = a.posting_date ? new Date(a.posting_date) : null
+        const pb = b.posting_date ? new Date(b.posting_date) : null
+        if (pa && pb) return (pb - pa) * d
+        if (pa) return -1
+        if (pb) return 1
+        return new Date(b.created_at) - new Date(a.created_at)
+      }
+      case 'deadline': {
+        const da = a.deadline && a.deadline !== '—' ? new Date(a.deadline) : null
+        const db_ = b.deadline && b.deadline !== '—' ? new Date(b.deadline) : null
+        if (da && db_) return (da - db_) * d
+        if (da) return -1
+        if (db_) return 1
+        return new Date(b.created_at) - new Date(a.created_at)
+      }
+      case 'company':
+        return (a.company || '').localeCompare(b.company || '') * d
+      case 'title':
+        return (a.title || '').localeCompare(b.title || '') * d
+      default:
+        return (new Date(b.created_at) - new Date(a.created_at)) * d
+    }
+  }
+
   return (
     <div className="kanban-shell" data-kc-style={kcStyle}>
       {/* Toolbar */}
@@ -98,7 +142,7 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
             </span>
           ))}
         </div>
-        <div className="filter-chips" style={{ borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
+        <div className="filter-chips" style={{ borderLeft: '1px solid var(--rule)', paddingLeft: 10 }}>
           {[['All', 'All'], ['tech', 'Tech'], ['hospitality', 'Hospitality'], ['general', 'General']].map(([val, label]) => (
             <span
               key={val}
@@ -110,7 +154,7 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
           ))}
         </div>
         {jobTypes.length > 1 && (
-          <div className="filter-chips" style={{ borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
+          <div className="filter-chips" style={{ borderLeft: '1px solid var(--rule)', paddingLeft: 10 }}>
             {jobTypes.map(t => (
               <span
                 key={t}
@@ -122,25 +166,34 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
             ))}
           </div>
         )}
-        <div className="flex-1" />
-        {filterResult && (
-          <span className="ai-filter-result">
-            Archived {filterResult.archived} · kept {filterResult.kept}
-            {filterResult.scored > 0 ? ` · scored ${filterResult.scored}` : ''}
-          </span>
-        )}
-        <button
-          className="btn-ai-filter"
-          onClick={handleFilterNew}
-          disabled={filteringNew}
-          title="Score unscored New jobs and archive poor fits (below 40)"
-        >
-          {filteringNew
-            ? <span className="spinner" style={{ width: 13, height: 13, borderColor: 'rgba(255,255,255,.35)', borderTopColor: '#fff' }} />
-            : <Icon name="wand" size={13} />
-          }
-          Filter with AI
-        </button>
+        <div style={{ borderLeft: '1px solid var(--rule)', paddingLeft: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 12, color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>Sort by</span>
+          <select className="sort-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+            {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <button className="sort-dir-btn" onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')} title={sortDir === 'desc' ? 'Descending' : 'Ascending'}>
+            {sortDir === 'desc' ? '↓' : '↑'}
+          </button>
+          <button
+            className="btn-ai-filter"
+            onClick={handleFilterNew}
+            disabled={filteringNew}
+            title="Score unscored New jobs and archive poor fits (below 40)"
+          >
+            {filteringNew
+              ? <span className="spinner" style={{ width: 13, height: 13, borderColor: 'rgba(255,255,255,.35)', borderTopColor: '#fff' }} />
+              : <Icon name="wand" size={13} />
+            }
+            Filter with AI
+          </button>
+          {filterResult && (
+            <span className="ai-filter-result">
+              Archived {filterResult.archived} · kept {filterResult.kept}
+              {filterResult.scored > 0 ? ` · scored ${filterResult.scored}` : ''}
+              {filterResult.fetching > 0 ? ` · fetching ${filterResult.fetching} in background` : ''}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Board */}
@@ -154,7 +207,7 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
           {COLUMNS.map(col => {
             const colJobs = filtered
               .filter(j => j.status === col)
-              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+              .sort(sortJobs)
             return (
               <SortableContext key={col} items={colJobs.map(j => j.id)} strategy={verticalListSortingStrategy}>
                 <KanbanColumn

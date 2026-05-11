@@ -29,6 +29,45 @@ function getDb() {
     db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('migrated_new_workflow_v2', '1');
   }
 
+  // Archive existing scraped jobs outside the configured location
+  const locationMigrated = db.prepare("SELECT value FROM settings WHERE key = 'migrated_location_filter_v1'").get();
+  if (!locationMigrated) {
+    const configuredLocation = (db.prepare("SELECT value FROM settings WHERE key = 'scraper_location'").get()?.value || 'Christchurch').toLowerCase().trim();
+    const keywordMap = {
+      christchurch: ['christchurch', 'canterbury', 'selwyn', 'waimakariri'],
+      auckland:     ['auckland'],
+      wellington:   ['wellington'],
+      hamilton:     ['hamilton', 'waikato'],
+      tauranga:     ['tauranga', 'bay of plenty'],
+      dunedin:      ['dunedin', 'otago'],
+    };
+    const keywords = keywordMap[configuredLocation];
+    if (keywords) {
+      const jobs = db.prepare("SELECT id, location FROM jobs WHERE source IN ('Seek', 'Trade Me Jobs') AND status = 'New' AND is_soft_deleted = 0 AND location != ''").all();
+      const toArchive = jobs.filter(j => !keywords.some(k => j.location.toLowerCase().includes(k)));
+      for (const j of toArchive) {
+        db.prepare("UPDATE jobs SET status = 'Archived', updated_at = datetime('now') WHERE id = ?").run(j.id);
+      }
+    }
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('migrated_location_filter_v1', '1');
+  }
+
+  // Remove retired sources — archive their jobs and strip from source_colors
+  const retiredSourcesMigrated = db.prepare("SELECT value FROM settings WHERE key = 'migrated_retired_sources_v1'").get();
+  if (!retiredSourcesMigrated) {
+    db.exec("UPDATE jobs SET status = 'Archived' WHERE source IN ('Jora', 'Indeed') AND status NOT IN ('Archived', 'Rejected') AND is_soft_deleted = 0");
+    const colorsRow = db.prepare("SELECT value FROM settings WHERE key = 'source_colors'").get();
+    if (colorsRow) {
+      try {
+        const colors = JSON.parse(colorsRow.value);
+        delete colors['Jora'];
+        delete colors['Indeed'];
+        db.prepare("UPDATE settings SET value = ? WHERE key = 'source_colors'").run(JSON.stringify(colors));
+      } catch {}
+    }
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('migrated_retired_sources_v1', '1');
+  }
+
   // Seed default settings
   const defaults = {
     theme:           'light',

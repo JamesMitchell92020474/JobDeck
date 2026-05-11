@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '../../context/AppContext'
-import { FitRing } from '../ui/FitScore'
 import Icon from '../ui/Icon'
 import api from '../../hooks/useApi'
 import OverviewTab    from './tabs/OverviewTab'
@@ -129,26 +128,7 @@ export default function CardDetail({ jobId, setRoute }) {
           )}
         </div>
 
-        {job.fit_score != null && (
-          <div className="fit-block">
-            <FitRing value={job.fit_score} size={72} />
-            <div className="copy">
-              <b>{job.fit_score >= 85 ? 'Strong match' : job.fit_score >= 70 ? 'Good match' : 'Partial match'}</b>
-              {job.ai_summary || `Your profile matches ${job.fit_score}% of the listing's stated requirements.`}
-            </div>
-          </div>
-        )}
 
-        {Array.isArray(job.skills_gaps) && job.skills_gaps.length > 0 && (
-          <div>
-            <div className="eyebrow" style={{ marginBottom: 8 }}>Skills gaps</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap' }}>
-              {job.skills_gaps.map((g, i) => (
-                <span key={i} className="skill-gap">{g}</span>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div>
           <div className="eyebrow" style={{ marginBottom: 10 }}>Move to</div>

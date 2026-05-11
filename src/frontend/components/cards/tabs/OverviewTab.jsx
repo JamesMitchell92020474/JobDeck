@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Icon from '../../ui/Icon'
+import { FitRing } from '../../ui/FitScore'
 
 export default function OverviewTab({ job, saveJob, descFetching, descError, onRefetchDesc }) {
   const [deadline, setDeadline] = useState(job.deadline || '')
@@ -13,10 +14,27 @@ export default function OverviewTab({ job, saveJob, descFetching, descError, onR
 
   return (
     <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 28 }}>
-      {job.ai_summary && (
-        <div>
-          <div className="eyebrow" style={{ marginBottom: 8 }}>AI match summary</div>
-          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.7, color: 'var(--ink-2)' }}>{job.ai_summary}</p>
+      {job.fit_score != null && (
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', padding: '16px 18px', borderRadius: 'var(--radius)', background: 'var(--bg-2)', border: '1px solid var(--rule)' }}>
+          <FitRing value={job.fit_score} size={64} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)', marginBottom: 6 }}>
+              {job.fit_score >= 85 ? 'Strong match' : job.fit_score >= 70 ? 'Good match' : job.fit_score >= 50 ? 'Partial match' : 'Low match'}
+            </div>
+            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, color: 'var(--ink-2)' }}>
+              {job.ai_summary || `Your profile matches ${job.fit_score}% of the listing's stated requirements.`}
+            </p>
+            {Array.isArray(job.skills_gaps) && job.skills_gaps.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <div className="eyebrow" style={{ marginBottom: 6 }}>Skills gaps</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+                  {job.skills_gaps.map((g, i) => (
+                    <span key={i} className="skill-gap">{g}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

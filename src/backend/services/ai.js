@@ -22,15 +22,18 @@ async function complete(prompt, { model = SONNET, system } = {}) {
   return res.content[0].text;
 }
 
-async function generateWelcome(stats, userName) {
-  const { new: newCount, interested, applied, interview, offer, upcomingDeadlines, recentMatches } = stats;
+async function generateWelcome(stats, userName, weather = null) {
+  const { new: newCount, interested, applied, interview, offer, upcomingDeadlines } = stats;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+  const month = new Date().getMonth() + 1; // 1-12
+  const season = month >= 3 && month <= 5 ? 'autumn' : month >= 6 && month <= 8 ? 'winter' : month >= 9 && month <= 11 ? 'spring' : 'summer';
+  const weatherLine = weather ? `Current weather in Christchurch: ${weather.temp}°C, ${weather.desc}.` : '';
 
-  const prompt = `Generate a warm, concise 1-2 sentence personalised welcome message for ${userName}'s job search dashboard.
-Current stats: ${newCount} new (unreviewed), ${interested} interested, ${applied} applied, ${interview} in interview, ${offer} offers.
-Recent: ${recentMatches} new matches in the last 24h. Upcoming deadlines: ${upcomingDeadlines} in next 7 days.
-Time of day: ${greeting}. NZ context. Be specific and encouraging but not sycophantic. Output plain text only, no markdown.`;
+  const prompt = `Write a warm, concise 1-2 sentence job search status update addressed directly to ${userName} (use "you/your", not third person).
+Current stats: ${newCount} new jobs awaiting review, ${interested} shortlisted, ${applied} applied, ${interview} in interview, ${offer} offers. Upcoming deadlines: ${upcomingDeadlines} in next 7 days.
+Time of day: ${greeting}. Season: ${season} (Southern Hemisphere — NZ). ${weatherLine} Be specific and encouraging but not sycophantic. You may weave in the weather or season naturally if it fits, but don't force it.
+Do NOT open with a greeting or the user's name — go straight to the job summary. Output plain text only, no markdown.`;
 
   return complete(prompt);
 }

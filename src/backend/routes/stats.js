@@ -2,6 +2,29 @@ const express = require('express');
 const { getDb, getSetting } = require('../db/database');
 const { generateWelcome } = require('../services/ai');
 
+// Christchurch coords — Open-Meteo, no API key required
+const WMO_DESCRIPTIONS = {
+  0: 'clear skies', 1: 'mainly clear', 2: 'partly cloudy', 3: 'overcast',
+  45: 'foggy', 48: 'foggy', 51: 'light drizzle', 53: 'drizzle', 55: 'heavy drizzle',
+  61: 'light rain', 63: 'rain', 65: 'heavy rain',
+  71: 'light snow', 73: 'snow', 75: 'heavy snow',
+  80: 'rain showers', 81: 'rain showers', 82: 'heavy rain showers',
+  95: 'thunderstorms',
+};
+
+async function fetchWeather() {
+  try {
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=-43.5321&longitude=172.6362&current=temperature_2m,weather_code&timezone=Pacific%2FAuckland';
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    const data = await res.json();
+    const temp = Math.round(data.current.temperature_2m);
+    const desc = WMO_DESCRIPTIONS[data.current.weather_code] || 'variable conditions';
+    return { temp, desc };
+  } catch {
+    return null;
+  }
+}
+
 const router = express.Router();
 
 // GET /api/stats
@@ -91,7 +114,10 @@ router.get('/welcome', async (req, res) => {
     ).get().n;
 
     const name = getSetting('display_name') || 'James';
-    const msg = await generateWelcome(stats, name);
+    const weather = await fetchWeather();
+    let msg = await generateWelcome(stats, name, weather);
+    msg = msg.replace(/^(good\s+(morning|afternoon|evening)[,!]?\s*(james[,!]?\s*)?|hi[,!]?\s*(james[,!]?\s*)?|hey[,!]?\s*(james[,!]?\s*)?|hello[,!]?\s*(james[,!]?\s*)?)/i, '').trimStart();
+    if (msg.length > 0) msg = msg[0].toUpperCase() + msg.slice(1);
     res.json({ message: msg });
   } catch (e) {
     res.json({ message: `Welcome back. You have jobs to review today.` });

@@ -1,17 +1,15 @@
 const { getDb, getSetting, setSetting } = require('../db/database');
-
-function normaliseJobType(raw) {
-  if (!raw) return '';
-  const s = raw.toLowerCase().replace(/[-_]/g, ' ').trim();
-  if (s.includes('full')) return 'Full time';
-  if (s.includes('part')) return 'Part time';
-  if (s.includes('contract') || s.includes('temp')) return 'Contract/Temp';
-  if (s.includes('casual')) return 'Casual';
-  if (s.includes('intern')) return 'Internship';
-  return raw.trim();
-}
+const { fetchDescriptionPage, normaliseJobType } = require('./fetchDescription');
+const { scoreFit } = require('./ai');
 const { log } = require('./logger');
 const { autoTag } = require('./autoTag');
+
+function cvForJob(job) {
+  const cat = job.job_category;
+  if (cat === 'tech')        return getSetting('cv_text_tech')        || getSetting('cv_text') || '';
+  if (cat === 'hospitality') return getSetting('cv_text_hospitality') || getSetting('cv_text') || '';
+  return getSetting('cv_text_tech') || getSetting('cv_text_hospitality') || getSetting('cv_text') || '';
+}
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
@@ -162,9 +160,10 @@ async function scrapeSeek() {
       });
       all.push(...jobs);
     }
-    return all.map(j => ({ ...j, source: 'Seek' }));
-  } finally {
+    return { jobs: all.map(j => ({ ...j, source: 'Seek' })), browser, context };
+  } catch (e) {
     await browser.close();
+    throw e;
   }
 }
 
@@ -286,16 +285,37 @@ async function scrapeTradeMe() {
       });
       all.push(...jobs);
     }
-    return all.map(j => ({ ...j, source: 'Trade Me Jobs' }));
-  } finally {
+    return { jobs: all.map(j => ({ ...j, source: 'Trade Me Jobs' })), browser, context };
+  } catch (e) {
     await browser.close();
+    throw e;
   }
 }
 
 
+// Keywords that must appear in job location for a given scraper_location setting
+const LOCATION_KEYWORDS = {
+  christchurch: ['christchurch', 'canterbury', 'selwyn', 'waimakariri'],
+  auckland:     ['auckland'],
+  wellington:   ['wellington'],
+  hamilton:     ['hamilton', 'waikato'],
+  tauranga:     ['tauranga', 'bay of plenty'],
+  dunedin:      ['dunedin', 'otago'],
+};
+
+function locationMatches(jobLocation, configuredLocation) {
+  if (!jobLocation || !configuredLocation) return true; // no location data — let it through
+  const keywords = LOCATION_KEYWORDS[configuredLocation.toLowerCase().trim()];
+  if (!keywords) return true; // unknown location config — don't filter
+  const loc = jobLocation.toLowerCase();
+  return keywords.some(k => loc.includes(k));
+}
+
 function saveJobsToDB(jobs) {
   const db = getDb();
+  const configuredLocation = getSetting('scraper_location') || 'Christchurch';
   let saved = 0;
+  const newJobs = [];
 
   const insert = db.prepare(`
     INSERT OR IGNORE INTO jobs (title, company, location, source, source_url, status, job_category, job_type, posting_date)
@@ -306,10 +326,14 @@ function saveJobsToDB(jobs) {
   try {
     for (const j of jobs) {
       if (!j.title) continue;
+      if (!locationMatches(j.location, configuredLocation)) continue;
+      if (normaliseJobType(j.job_type) === 'Casual') continue;
       const exists = db.prepare('SELECT id FROM jobs WHERE title = ? AND company = ? AND source = ?')
         .get(j.title, j.company || '', j.source);
       if (!exists) {
-        insert.run(j.title, j.company || '', j.location || '', j.source, j.url || '', autoTag(j.title), normaliseJobType(j.job_type), j.posting_date || '');
+        const info = insert.run(j.title, j.company || '', j.location || '', j.source, j.url || '', autoTag(j.title), normaliseJobType(j.job_type), j.posting_date || '');
+        const newJob = db.prepare('SELECT * FROM jobs WHERE id = ?').get(info.lastInsertRowid);
+        if (newJob) newJobs.push(newJob);
         saved++;
       }
     }
@@ -317,7 +341,68 @@ function saveJobsToDB(jobs) {
   } catch (e) {
     db.exec('ROLLBACK');
   }
-  return saved;
+  return { count: saved, newJobs };
+}
+
+async function fetchDescriptionsForNewJobs(context, newJobs) {
+  const withUrl = newJobs.filter(j => j.source_url);
+  if (!withUrl.length) return;
+
+  log({ type: 'scraper', trigger: 'AUTO', action: 'FETCH-DESC-START', reason: `Fetching descriptions for ${withUrl.length} new jobs` });
+  const db = getDb();
+  let done = 0;
+
+  for (const job of withUrl) {
+    try {
+      log({ type: 'scraper', trigger: 'AUTO', action: 'FETCH-DESC-JOB', reason: `[${done + 1}/${withUrl.length}] ${job.title} — ${job.company}` });
+      const result = await fetchDescriptionPage(context, job.source_url);
+      if (!result.html) { done++; continue; }
+
+      const jobType = normaliseJobType(result.jobType || '');
+      db.prepare(`UPDATE jobs SET description = ?, logo_url = ?,
+        ${result.postingDate ? 'posting_date = ?,' : ''}
+        ${jobType && !job.job_type ? 'job_type = ?,' : ''}
+        salary = ?, updated_at = datetime('now') WHERE id = ?`)
+        .run(
+          result.html, result.logoUrl || '',
+          ...(result.postingDate ? [result.postingDate] : []),
+          ...(jobType && !job.job_type ? [jobType] : []),
+          result.salary || '', job.id
+        );
+
+      const cvText = cvForJob(job);
+      if (cvText) {
+        try {
+          const scored = await scoreFit(result.html, cvText);
+          const hasDeadline = job.deadline && job.deadline.trim();
+          db.prepare(`UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?,
+            ${!hasDeadline && scored.deadline ? 'deadline = ?,' : ''}
+            updated_at = datetime('now') WHERE id = ?`)
+            .run(
+              scored.fit_score, scored.summary, JSON.stringify(scored.skills_gaps || []),
+              ...(!hasDeadline && scored.deadline ? [scored.deadline] : []),
+              job.id
+            );
+        } catch {}
+      }
+      done++;
+    } catch (err) {
+      done++;
+      log({ type: 'scraper', trigger: 'AUTO', action: 'FETCH-DESC-ERROR', reason: `${job.title}: ${err.message}` });
+    }
+  }
+
+  // Auto-archive poor fits now that all jobs are scored
+  const THRESHOLD = 40;
+  const toArchive = db.prepare(
+    'SELECT id, title, company, source, fit_score FROM jobs WHERE status = ? AND is_soft_deleted = 0 AND fit_score IS NOT NULL AND fit_score < ?'
+  ).all('New', THRESHOLD);
+  for (const job of toArchive) {
+    db.prepare("UPDATE jobs SET status = 'Archived', updated_at = datetime('now') WHERE id = ?").run(job.id);
+    log({ type: 'activity', trigger: 'AI', action: 'ARCHIVED', jobTitle: job.title, company: job.company, source: job.source, reason: `AI filter: fit score ${job.fit_score} below threshold ${THRESHOLD}` });
+  }
+
+  log({ type: 'scraper', trigger: 'AUTO', action: 'FETCH-DESC-DONE', reason: `Processed ${done}/${withUrl.length} jobs, archived ${toArchive.length} poor fits` });
 }
 
 async function runScrape(sources = ['Seek', 'Trade Me Jobs']) {
@@ -333,14 +418,17 @@ async function runScrape(sources = ['Seek', 'Trade Me Jobs']) {
     if (!scraper) continue;
 
     log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-START', source: src });
-    const jobs = await scraper();
-    const saved = saveJobsToDB(jobs);
+    const { jobs, browser, context } = await scraper();
+    const { count: saved, newJobs } = saveJobsToDB(jobs);
     log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-DONE', source: src, reason: `${jobs.length} found, ${saved} new` });
     setSetting(`last_sync_${src}`, new Date().toISOString());
     results[src] = { found: jobs.length, saved };
+
+    // Fetch descriptions + auto-score in background — browser closes when done
+    fetchDescriptionsForNewJobs(context, newJobs).finally(() => browser.close()).catch(() => {});
   }
 
   return results;
 }
 
-module.exports = { runScrape };
+module.exports = { runScrape, fetchDescriptionsForNewJobs };

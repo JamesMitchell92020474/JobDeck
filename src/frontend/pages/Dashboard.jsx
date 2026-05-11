@@ -107,7 +107,7 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
       const result = await api.post('/jobs/filter-new', { threshold: 40 })
       const archivedIds = new Set(result.archived.map(j => j.id))
       setJobs(prev => prev.map(j => archivedIds.has(j.id) ? { ...j, status: 'Archived' } : j))
-      setFilterResult({ archived: result.archived.length, kept: result.kept })
+      setFilterResult({ archived: result.archived.length, kept: result.kept, fetching: result.fetching || 0 })
     } catch {}
     finally { setFiltering(false) }
   }
@@ -157,29 +157,12 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
           <span className="eyebrow">{dayStr}</span>
           <span className="eyebrow">Christchurch · NZ</span>
         </div>
-        <h1 className="hello-h">
-          {greet}, <em>James</em>.{' '}
-          <span className="quiet">
-            {loadingWelcome
-              ? <span className="spinner" style={{ display: 'inline-block', verticalAlign: 'middle' }} />
-              : welcome}
-          </span>
-        </h1>
-      </div>
-
-      {/* Stat strip */}
-      <div className="stat-strip" onClick={() => setRoute('board')}>
-        {COLUMNS.map((c, i) => (
-          <div key={c} className="stat-pill">
-            {i > 0 && <span className="stat-sep" />}
-            <span className="stat-dot" style={{ background: `var(--col-${c.toLowerCase()})` }} />
-            <span className="stat-num">{counts[c]}</span>
-            <span className="stat-label">{c}</span>
-            {c === 'New' && statsData?.recent > 0 && (
-              <span className="stat-delta">+{statsData.recent} today</span>
-            )}
-          </div>
-        ))}
+        <h1 className="hello-h">{greet}, <em>James</em>.</h1>
+        <p className="hello-sub">
+          {loadingWelcome
+            ? <span className="spinner" style={{ display: 'inline-block', verticalAlign: 'middle' }} />
+            : welcome}
+        </p>
       </div>
 
       {/* Quick actions */}
@@ -200,12 +183,30 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
           {filtering ? 'Filtering…' : 'Filter with AI'}
         </button>
         {filterResult && (
-          <span className="dash-action-note">Archived {filterResult.archived} · kept {filterResult.kept}</span>
+          <span className="dash-action-note">
+            Archived {filterResult.archived} · kept {filterResult.kept}
+            {filterResult.fetching > 0 ? ` · fetching ${filterResult.fetching} in background` : ''}
+          </span>
         )}
         <div style={{ flex: 1 }} />
         <button className="btn btn-ghost btn-sm" onClick={onNewJob}>
           <Icon name="plus" size={12} /> Add job
         </button>
+      </div>
+
+      {/* Stat strip */}
+      <div className="stat-strip" onClick={() => setRoute('board')}>
+        {COLUMNS.map((c, i) => (
+          <div key={c} className="stat-pill">
+            {i > 0 && <span className="stat-sep" />}
+            <span className="stat-dot" style={{ background: `var(--col-${c.toLowerCase()})` }} />
+            <span className="stat-num">{counts[c]}</span>
+            <span className="stat-label">{c}</span>
+            {c === 'New' && statsData?.recent > 0 && (
+              <span className="stat-delta">+{statsData.recent} today</span>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Latest New + News */}
@@ -232,7 +233,11 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
                     {j.fit_score != null && <Fit value={j.fit_score} />}
                   </div>
                   <div className="tags" style={{ flexWrap: 'wrap', gap: 5 }}>
-                    {j.source && <Pill>{j.source}</Pill>}
+                    {j.source && (
+                      <Pill style={srcColors[j.source] ? { borderColor: srcColors[j.source], color: srcColors[j.source], background: `${srcColors[j.source]}18` } : {}}>
+                        {j.source}
+                      </Pill>
+                    )}
                     {isExpiringSoon(j.expiry_date) && (
                       <span className="kc-badge kc-badge--warn">Expiring soon</span>
                     )}

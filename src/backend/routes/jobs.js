@@ -7,16 +7,8 @@ const { log } = require('../services/logger');
 const { scoreFit, generateCoverLetter, jobChat } = require('../services/ai');
 const { autoTag } = require('../services/autoTag');
 
-function normaliseJobType(raw) {
-  if (!raw) return '';
-  const s = raw.toLowerCase().replace(/[-_]/g, ' ').trim();
-  if (s.includes('full')) return 'Full time';
-  if (s.includes('part')) return 'Part time';
-  if (s.includes('contract') || s.includes('temp')) return 'Contract/Temp';
-  if (s.includes('casual')) return 'Casual';
-  if (s.includes('intern')) return 'Internship';
-  return raw.trim();
-}
+const { fetchDescriptionPage, normaliseJobType } = require('../services/fetchDescription');
+const { fetchDescriptionsForNewJobs } = require('../services/scraper');
 
 function cvForJob(job) {
   const cat = job.job_category;
@@ -87,12 +79,14 @@ router.post('/', (req, res) => {
   res.json(job);
 });
 
+let descFetchInProgress = false;
+
 // POST /api/jobs/filter-new — score unscored New jobs and archive poor fits
 router.post('/filter-new', async (req, res) => {
   const { threshold = 40 } = req.body;
   const db = getDb();
   const newJobs = db.prepare('SELECT * FROM jobs WHERE status = ? AND is_soft_deleted = 0').all('New');
-  if (newJobs.length === 0) return res.json({ archived: [], kept: 0, scored: 0 });
+  if (newJobs.length === 0) return res.json({ archived: [], kept: 0, scored: 0, fetching: 0 });
 
   const archived = [];
   let scored = 0;
@@ -120,7 +114,24 @@ router.post('/filter-new', async (req, res) => {
     }
   }
 
-  res.json({ archived, kept: newJobs.length - archived.length, scored });
+  // Kick off background description fetching for New jobs that have no description yet
+  const undescribed = newJobs.filter(j => !j.description && j.source_url && !archived.find(a => a.id === j.id));
+  if (undescribed.length > 0 && !descFetchInProgress) {
+    descFetchInProgress = true;
+    const { chromium } = require('playwright');
+    chromium.launch({ headless: true, args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'] }).then(async browser => {
+      const context = await browser.newContext({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' });
+      return fetchDescriptionsForNewJobs(context, undescribed).finally(() => browser.close());
+    }).finally(() => { descFetchInProgress = false; }).catch(() => {});
+  }
+
+  res.json({
+    archived,
+    kept: newJobs.length - archived.length,
+    scored,
+    fetching: undescribed.length,
+    fetchInProgress: descFetchInProgress && undescribed.length === 0,
+  });
 });
 
 // GET /api/jobs/:id
@@ -302,7 +313,6 @@ router.post('/:id/fetch-description', async (req, res) => {
   if (!job) return res.status(404).json({ error: 'Not found' });
   if (!job.source_url) return res.status(400).json({ error: 'No source URL for this job' });
 
-  const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
   let description = '';
   let logoUrl     = '';
   let postingDate = '';
@@ -311,157 +321,18 @@ router.post('/:id/fetch-description', async (req, res) => {
 
   try {
     const { chromium } = require('playwright');
-    const browser = await chromium.launch({
-      headless: true,
-      args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
-    });
-    const context = await browser.newContext({ userAgent: USER_AGENT });
-    const page = await context.newPage();
-    await page.goto(job.source_url, { waitUntil: 'load', timeout: 45000 });
-    // Give JS-rendered content a moment to settle after load
-    await page.waitForTimeout(1500);
-
-    const result = await page.evaluate(() => {
-      const KEEP_TAGS = new Set(['p','ul','ol','li','strong','b','em','i','h1','h2','h3','h4','br','a']);
-
-      function cleanEl(el) {
-        // Resolve obscured contacts
-        el.querySelectorAll('a[href^="tel:"]').forEach(a => {
-          a.textContent = decodeURIComponent(a.href.replace('tel:', '').trim()) || a.textContent;
-        });
-        el.querySelectorAll('a[href^="mailto:"]').forEach(a => {
-          a.textContent = decodeURIComponent(a.href.replace('mailto:', '').split('?')[0].trim()) || a.textContent;
-        });
-
-        // Remove junk elements
-        el.querySelectorAll('script,style,button,input,select,form,svg,img,[class*="apply"],[class*="button"],[class*="social"],[class*="share"]').forEach(n => n.remove());
-
-        // Convert block-level elements to <p> before stripping so line breaks survive
-        const BLOCK_TAGS = new Set(['div','section','article','header','footer','aside','main','figure','figcaption']);
-        el.querySelectorAll([...BLOCK_TAGS].join(',')).forEach(node => {
-          const p = document.createElement('p');
-          while (node.firstChild) p.appendChild(node.firstChild);
-          node.parentNode?.replaceChild(p, node);
-        });
-
-        // Walk the tree and strip remaining disallowed tags (keep their children)
-        const unwrap = node => {
-          if (node.nodeType === 1 && !KEEP_TAGS.has(node.tagName.toLowerCase())) {
-            const parent = node.parentNode;
-            if (parent) {
-              while (node.firstChild) parent.insertBefore(node.firstChild, node);
-              parent.removeChild(node);
-            }
-          }
-        };
-        [...el.querySelectorAll('*')].reverse().forEach(unwrap);
-
-        // Strip all attributes except href on <a>
-        el.querySelectorAll('*').forEach(n => {
-          [...n.attributes].forEach(attr => {
-            if (!(n.tagName === 'A' && attr.name === 'href')) n.removeAttribute(attr.name);
-          });
-        });
-
-        // Collapse 3+ consecutive empty <p> tags down to one
-        let empties = 0;
-        [...el.querySelectorAll('p')].forEach(p => {
-          if (!p.textContent.trim()) { empties++; if (empties > 1) p.remove(); }
-          else empties = 0;
-        });
-
-        return el.innerHTML.trim();
-      }
-
-      // Posting date, job type, salary from detail page
-      const postedEl = document.querySelector('[data-automation="job-detail-date"]') ||
-                       document.querySelector('[data-automation="jobPostDate"]') ||
-                       document.querySelector('[data-automation="jobListingDate"]') ||
-                       document.querySelector('time[datetime]') ||
-                       document.querySelector('time');
-
-      function resolveDate(el) {
-        if (!el) return '';
-        // Prefer machine-readable datetime attribute
-        const iso = el.getAttribute('datetime');
-        if (iso) {
-          const d = new Date(iso);
-          if (!isNaN(d)) {
-            const now = new Date();
-            return d.toLocaleDateString('en-NZ', {
-              day: 'numeric', month: 'short',
-              year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
-            });
-          }
-        }
-        // Fall back to text — convert relative strings to real dates
-        const txt = el.textContent.trim();
-        const dMatch = txt.match(/^(\d+)\s*d(?:ays?)?\s+ago/i);
-        if (dMatch) {
-          const d = new Date();
-          d.setDate(d.getDate() - parseInt(dMatch[1]));
-          return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
-        }
-        const hMatch = txt.match(/^(\d+)\s*h(?:ours?)?\s+ago/i);
-        if (hMatch) return new Date().toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
-        return txt;
-      }
-      const postingDate = resolveDate(postedEl);
-
-      const jobTypeEl = document.querySelector('[data-automation="job-detail-work-type"]') ||
-                        document.querySelector('[data-automation="workType"]') ||
-                        document.querySelector('[class*="workType"]');
-      const jobType = jobTypeEl?.textContent?.trim() || '';
-
-      const salaryEl = document.querySelector('[data-automation="job-detail-salary"]') ||
-                       document.querySelector('[data-automation="salary"]') ||
-                       document.querySelector('[class*="salary"]') ||
-                       document.querySelector('[class*="Salary"]');
-      const rawSalary = salaryEl?.textContent?.trim() || '';
-      // Only keep if it looks like an actual salary figure (contains $ or digits with k/hr/year)
-      const salary = /(\$[\d,]+|[\d,]+k|\d+\s*(per\s*(hour|hr|year|annum|pa)|p\.h\.|p\.a\.))/i.test(rawSalary) ? rawSalary : '';
-
-      // Logo — scoped to the job header only to avoid picking up logos from
-      // featured/recommended jobs sections further down the page
-      const jobHeader = document.querySelector('[data-automation="job-detail-header"]') ||
-                        document.querySelector('[data-automation="jobDetailsHeader"]') ||
-                        document.querySelector('[data-automation="job-detail-page"]')?.firstElementChild ||
-                        document.querySelector('main > *:first-child') ||
-                        document.querySelector('header');
-      const scope = jobHeader || document;
-      const logoEl = scope.querySelector('[data-automation="company-logo"] img') ||
-                     scope.querySelector('[class*="CompanyLogo"] img') ||
-                     scope.querySelector('[class*="company-logo"] img') ||
-                     scope.querySelector('[class*="companyLogo"] img') ||
-                     scope.querySelector('img[src*="logo"]') ||
-                     scope.querySelector('img[src*="company"]');
-      const logoUrl = logoEl?.src || '';
-
-      // Description
-      const seekDesc = document.querySelector('[data-automation="jobAdDetails"]') ||
-                       document.querySelector('[data-automation="job-detail-page-job-description"]');
-      if (seekDesc) return { html: cleanEl(seekDesc), logoUrl, postingDate, jobType, salary };
-
-      const tmDesc = document.querySelector('.tm-markdown') ||
-                     document.querySelector('[class*="job-description"]');
-      if (tmDesc) return { html: cleanEl(tmDesc), logoUrl, postingDate, jobType, salary };
-
-      const generic = document.querySelector('#jobDescriptionText') ||
-                      document.querySelector('[class*="description"]') ||
-                      document.querySelector('[class*="job-body"]') ||
-                      document.querySelector('article') ||
-                      document.querySelector('main');
-      if (!generic) return { html: '', logoUrl, postingDate, jobType, salary };
-      const html = cleanEl(generic);
-      return { html: html.length > 12000 ? html.slice(0, 12000) : html, logoUrl, postingDate, jobType, salary };
-    });
-
-    description   = result.html;
-    logoUrl       = result.logoUrl || '';
-    postingDate   = result.postingDate || '';
-    jobType       = normaliseJobType(result.jobType || '');
-    salary        = result.salary || '';
-    await browser.close();
+    const browser = await chromium.launch({ headless: true, args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'] });
+    const context = await browser.newContext({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' });
+    try {
+      const result = await fetchDescriptionPage(context, job.source_url);
+      description = result.html;
+      logoUrl     = result.logoUrl || '';
+      postingDate = result.postingDate || '';
+      jobType     = normaliseJobType(result.jobType || '');
+      salary      = result.salary || '';
+    } finally {
+      await browser.close();
+    }
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

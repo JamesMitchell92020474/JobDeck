@@ -98,6 +98,11 @@ Card styles: `.kc` + `[data-kc-style="edge|bordered|minimal"]` on `.kanban-shell
 Theme is applied via `data-mode` attribute on `<html>` (NOT `data-theme`). Manual only — no auto-toggle.
 Density via `data-density`. Both set in `AppContext.jsx`.
 
+Sidebar and topbar use hardcoded `#423A8E` (not the CSS variable) with white text — overrides are
+scoped directly in `.sidebar` and `.topbar` rules rather than via the design token system.
+
+Favicon: `src/frontend/favicon.svg` — indigo rounded square with white italic "JD" monogram.
+
 Column colours (CSS vars):
 - `--col-new`         #6B7FD4 (soft periwinkle)
 - `--col-interested`  #FFC107 (yellow)
@@ -110,6 +115,19 @@ Column colours (CSS vars):
 Default source colours (stored as JSON in `source_colors` setting):
 - Seek `#FFC107` · Trade Me Jobs `#DC3545`
 
+## Fit score component
+
+`src/frontend/components/ui/FitScore.jsx` exports:
+- `Fit` — 44px SVG donut for kanban cards and dashboard listings
+- `FitRing` — configurable SVG donut (default 72px) for detail Overview tab
+- `Pill` — source/category badge
+
+Both use a red→yellow→green colour gradient based on score value. The `Donut` helper
+interpolates: 0–40 red→amber, 40–100 amber→green.
+
+AI assessment (score + summary + skills gaps) is consolidated into a single box at the
+top of the Overview tab. Not shown in the sidebar.
+
 ## AI models
 
 - Standard: `claude-sonnet-4-20250514`
@@ -119,6 +137,10 @@ Default source colours (stored as JSON in `source_colors` setting):
 API key loaded from `ANTHROPIC_API_KEY` env var, falls back to `api_key` DB setting.
 
 `scoreFit()` returns: `{ fit_score, summary, skills_gaps, deadline }` — deadline extracted from job description text in the same call, saved only if job doesn't already have one.
+
+`generateWelcome(stats, userName, weather)` — weather is fetched from Open-Meteo (Christchurch,
+no API key required) and passed in. Falls back gracefully if fetch fails. Includes correct
+NZ Southern Hemisphere season. Strips any leading greeting from the AI response server-side.
 
 ## Frontend routing
 
@@ -174,7 +196,10 @@ Order: New → Interested → Applied → Interview → Offer → Rejected → A
 "Filter with AI" button appears in both the kanban toolbar and the dashboard quick-actions row. Calls `POST /api/jobs/filter-new`:
 1. Scores any unscored New jobs that have a fetched description
 2. Archives all New jobs with `fit_score < 40`
-3. Returns `{ archived, kept, scored }` — shown as an inline result note next to the button
+3. Kicks off background Playwright fetch for any New jobs missing descriptions — scores and auto-archives them when done
+4. Returns `{ archived, kept, scored, fetching }` — shown as an inline result note next to the button
+
+A `descFetchInProgress` module-level flag prevents concurrent background fetches from stacking up.
 
 ## Job categories
 
@@ -193,14 +218,16 @@ Board has category filter chips: All / Tech / Hospitality / General.
 
 Layout (top to bottom):
 1. **Welcome** — greeting + AI-generated welcome message (`GET /api/stats/welcome`)
-2. **Stat strip** — compact single-row pipeline counts, clickable to board
-3. **Quick actions** — Sync Sources · Filter with AI · Add Job (right-aligned)
+2. **Quick actions** — Sync Sources · Filter with AI · Add Job (right-aligned)
+3. **Stat strip** — compact single-row pipeline counts, clickable to board
 4. **grid-3 (2:1)** — New listings (up to 8, sorted by fit score desc) | News feed
 5. **grid-2** — Weekly activity chart | Sources donut
 6. **Deadlines** — only rendered when jobs have deadlines set
 
 New listings sorts by `fit_score DESC` (scored jobs first), then `created_at DESC` for unscored.
 News feed auto-refreshes every 30 minutes via `setInterval`.
+Dashboard content is centred (`margin: 0 auto`) and offset by half the sidebar width via
+`transform: translateX(calc(var(--sidebar-w) / -2))` to appear centred on the full screen.
 
 ## Scraping
 
@@ -214,6 +241,21 @@ Scraper reads `scraper_location`, `scraper_keywords_tech`, `scraper_keywords_hos
 Extracts per job from search results: title, company, location, url, job_type (normalised), posting_date.
 Duplicate check: skips insert if same title + company + source already exists.
 Scraped jobs default to status **New**. Manually added jobs default to **Interested**.
+
+**Location filtering** — `saveJobsToDB` skips jobs whose location doesn't match the configured
+`scraper_location`. Keywords per city defined in `LOCATION_KEYWORDS` map in `scraper.js`.
+**Casual jobs are excluded** — `normaliseJobType() === 'Casual'` skips insert.
+
+**Post-scrape description fetch** — after saving new jobs, `fetchDescriptionsForNewJobs(context, newJobs)`
+runs in the background using the same browser session. Fetches description, awaits `scoreFit`, then
+auto-archives poor fits (< 40). Browser closes when done. Logs `FETCH-DESC-START`, `FETCH-DESC-JOB [n/total]`,
+`FETCH-DESC-DONE`, `FETCH-DESC-ERROR` for visibility.
+
+### fetchDescription service
+
+`src/backend/services/fetchDescription.js` — shared Playwright page evaluation logic used by both
+the scraper and the on-demand `/:id/fetch-description` route. Exports `fetchDescriptionPage(context, url)`
+and `normaliseJobType(raw)`.
 
 ### fetch-description (on-demand, per job)
 
@@ -231,18 +273,20 @@ After saving, auto-scores in background via `scoreFit()` (non-blocking).
 
 Description is stored as cleaned HTML and rendered with `dangerouslySetInnerHTML`. Plain-text fallback (pre-wrap) for jobs fetched before HTML support.
 
-### Board filtering
+### Board filtering and sorting
 
 Filter chips above the kanban (all frontend-only, no DB queries):
-- **Source** chips — one per source in use
+- **Source** chips — derived from actual job data (not settings keys)
 - **Category** chips — All / Tech / Hospitality / General
 - **Job type** chips — All / Full time / Part time / Contract/Temp / Casual / Internship (only shows types present in current jobs)
 
-Board sorts by `created_at DESC` within each column.
+Sort dropdown: Title / Company / Date added / Date posted / Deadline / Score, with asc/desc toggle.
+Nulls always sort to the bottom regardless of direction.
 
 ### Job type normalisation
 
-`normaliseJobType()` in both `scraper.js` and `jobs.js` maps Seek's inconsistent labels to standard values: `Full time`, `Part time`, `Contract/Temp`, `Casual`, `Internship`.
+`normaliseJobType()` in `fetchDescription.js` (shared) maps Seek's inconsistent labels to:
+`Full time`, `Part time`, `Contract/Temp`, `Casual`, `Internship`.
 
 ## Known issues
 

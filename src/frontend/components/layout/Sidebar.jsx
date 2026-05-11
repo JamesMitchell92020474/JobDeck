@@ -22,7 +22,6 @@ export default function Sidebar({ route, setRoute }) {
       <div className="brand">
         <span className="brand-mark">
           Job<em style={{ fontStyle: 'italic' }}>Deck</em>
-          <span className="dot">.</span>
         </span>
       </div>
 
