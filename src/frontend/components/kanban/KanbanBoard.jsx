@@ -17,6 +17,7 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
   const [query,       setQuery]       = useState('')
   const [srcFilter,   setSrcFilter]   = useState('All')
   const [catFilter,   setCatFilter]   = useState('All')
+  const [typeFilter,  setTypeFilter]  = useState('All')
   const [activeId,    setActiveId]    = useState(null)
   const [addingToCol, setAddingToCol] = useState(null)
 
@@ -26,12 +27,15 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
   const sources   = ['All', ...Object.keys(srcColors)]
 
   const activeJobs = jobs.filter(j => !j.is_soft_deleted)
+  const TYPE_ORDER = ['Full time', 'Part time', 'Contract/Temp', 'Casual', 'Internship']
+  const jobTypes   = ['All', ...TYPE_ORDER.filter(t => activeJobs.some(j => j.job_type === t))]
   const filtered   = activeJobs.filter(j => {
     const q = query.toLowerCase()
     const matchQ = !q || j.title?.toLowerCase().includes(q) || j.company?.toLowerCase().includes(q)
     const matchS = srcFilter === 'All' || j.source === srcFilter
     const matchC = catFilter === 'All' || j.job_category === catFilter || (catFilter === 'general' && !j.job_category)
-    return matchQ && matchS && matchC
+    const matchT = typeFilter === 'All' || j.job_type === typeFilter
+    return matchQ && matchS && matchC && matchT
   })
 
   const handleDragStart = (e) => setActiveId(e.active.id)
@@ -90,6 +94,19 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
             </span>
           ))}
         </div>
+        {jobTypes.length > 1 && (
+          <div className="filter-chips" style={{ borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
+            {jobTypes.map(t => (
+              <span
+                key={t}
+                className={`filter-chip ${typeFilter === t ? 'active' : ''}`}
+                onClick={() => setTypeFilter(t)}
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="flex-1" />
       </div>
 

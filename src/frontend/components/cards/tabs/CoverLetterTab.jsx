@@ -3,11 +3,12 @@ import RichTextEditor from '../../editor/RichTextEditor'
 import Icon from '../../ui/Icon'
 import api from '../../../hooks/useApi'
 
-export default function CoverLetterTab({ job, saveJob }) {
+export default function CoverLetterTab({ job, saveJob, onFileExported }) {
   const [content,    setContent]    = useState(job.cover_letter || '')
   const [generating, setGenerating] = useState(false)
   const [exporting,  setExporting]  = useState(null)
   const [error,      setError]      = useState('')
+  const [exported,   setExported]   = useState(null)
 
   const generate = async () => {
     setGenerating(true); setError('')
@@ -25,16 +26,19 @@ export default function CoverLetterTab({ job, saveJob }) {
   }
 
   const exportAs = async (type) => {
-    setExporting(type)
+    setExporting(type); setError(''); setExported(null)
     try {
       const res = await api.post(`/jobs/${job.id}/export-${type}`, { html: content })
-      alert(`Saved: ${res.filename}`)
-    } catch (e) { setError(e.message) }
+      setExported(`Saved to Files tab: ${res.filename}`)
+      if (res.file) onFileExported?.(res.file)
+    } catch (e) {
+      setError(`Export failed: ${e.message}`)
+    }
     finally { setExporting(null) }
   }
 
   return (
-    <div style={{ maxWidth: 760 }}>
+    <div style={{ maxWidth: 900 }}>
       <RichTextEditor content={content} onChange={handleChange} />
 
       <div className="cl-actions">
@@ -52,7 +56,8 @@ export default function CoverLetterTab({ job, saveJob }) {
         </button>
       </div>
 
-      {error && <div className="error-banner" style={{ marginTop: 12 }}>{error}</div>}
+      {error    && <div className="error-banner" style={{ marginTop: 12 }}>{error}</div>}
+      {exported && <div style={{ marginTop: 12, fontSize: 13, color: 'var(--col-offer)', fontFamily: 'var(--font-mono)' }}>{exported}</div>}
     </div>
   )
 }

@@ -1,4 +1,15 @@
 const { getDb, getSetting, setSetting } = require('../db/database');
+
+function normaliseJobType(raw) {
+  if (!raw) return '';
+  const s = raw.toLowerCase().replace(/[-_]/g, ' ').trim();
+  if (s.includes('full')) return 'Full time';
+  if (s.includes('part')) return 'Part time';
+  if (s.includes('contract') || s.includes('temp')) return 'Contract/Temp';
+  if (s.includes('casual')) return 'Casual';
+  if (s.includes('intern')) return 'Internship';
+  return raw.trim();
+}
 const { log } = require('./logger');
 const { autoTag } = require('./autoTag');
 
@@ -51,8 +62,41 @@ async function scrapeSeekUrl(context, url) {
         return '';
       };
 
-      const jobTypeSels  = ['[data-automation="jobWorkType"]', '[data-automation="workType"]', '[class*="workType"]', '[class*="work-type"]'];
-      const postedSels   = ['[data-automation="jobListingDate"]', '[data-automation="jobDate"]', '[class*="listed-date"]', 'time'];
+      const jobTypeSels = ['[data-automation="jobWorkType"]', '[data-automation="workType"]', '[class*="workType"]', '[class*="work-type"]'];
+      const postedSels  = ['[data-automation="jobListingDate"]', '[data-automation="jobDate"]', '[class*="listed-date"]', 'time[datetime]', 'time'];
+
+      function resolvePostedDate(el) {
+        if (!el) return '';
+        const iso = el.getAttribute && el.getAttribute('datetime');
+        if (iso) {
+          const d = new Date(iso);
+          if (!isNaN(d)) {
+            const now = new Date();
+            return d.toLocaleDateString('en-NZ', {
+              day: 'numeric', month: 'short',
+              year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+            });
+          }
+        }
+        const txt = el.textContent.trim();
+        const dMatch = txt.match(/^(\d+)\s*d(?:ays?)?\s+ago/i);
+        if (dMatch) {
+          const d = new Date(); d.setDate(d.getDate() - parseInt(dMatch[1]));
+          return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+        }
+        if (txt.match(/^(\d+)\s*h(?:ours?)?\s+ago/i)) {
+          return new Date().toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+        }
+        return txt;
+      }
+
+      function pickDate(card, sels) {
+        for (const s of sels) {
+          const el = card.querySelector(s);
+          if (el) return resolvePostedDate(el);
+        }
+        return '';
+      }
 
       return [...document.querySelectorAll(sel)].slice(0, 25).map(c => ({
         title:        pick(c, titleSels),
@@ -60,7 +104,7 @@ async function scrapeSeekUrl(context, url) {
         location:     pick(c, locationSels),
         url:          pickHref(c, titleSels),
         job_type:     pick(c, jobTypeSels),
-        posting_date: pick(c, postedSels),
+        posting_date: pickDate(c, postedSels),
       })).filter(j => j.title);
     }, cardSel);
   } finally {
@@ -298,7 +342,7 @@ function saveJobsToDB(jobs) {
       const exists = db.prepare('SELECT id FROM jobs WHERE title = ? AND company = ? AND source = ?')
         .get(j.title, j.company || '', j.source);
       if (!exists) {
-        insert.run(j.title, j.company || '', j.location || '', j.source, j.url || '', autoTag(j.title), j.job_type || '', j.posting_date || '');
+        insert.run(j.title, j.company || '', j.location || '', j.source, j.url || '', autoTag(j.title), normaliseJobType(j.job_type), j.posting_date || '');
         saved++;
       }
     }

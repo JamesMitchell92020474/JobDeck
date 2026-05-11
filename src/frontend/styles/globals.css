@@ -455,19 +455,20 @@ h1,h2,h3,h4  { margin: 0; font-weight: 500; }
 
 /* Cover letter editor */
 .cl-toolbar {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 10px 14px; border: 1px solid var(--rule);
+  display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; overflow-x: auto;
+  padding: 8px 12px; border: 1px solid var(--rule);
   border-radius: var(--radius) var(--radius) 0 0; background: var(--bg-2); border-bottom: 0;
 }
 .cl-toolbar .group { display: flex; gap: 2px; padding: 0 6px; border-right: 1px solid var(--rule); }
 .cl-toolbar .group:last-child { border-right: 0; }
 .cl-tool {
-  width: 26px; height: 26px; display: grid; place-items: center;
+  width: 28px; height: 28px; display: grid; place-items: center;
   border-radius: 4px; color: var(--ink-2); font-size: 12px; font-weight: 500; cursor: pointer;
-  transition: background .12s;
+  transition: background .12s; padding: 0; border: none; background: transparent; flex-shrink: 0;
 }
 .cl-tool:hover { background: var(--bg-sunk); }
 .cl-tool.active { background: var(--ink); color: var(--bg-2); }
+.cl-select { padding: 0 4px; font-size: 11px; font-family: var(--font-mono); cursor: pointer; border: none; background: transparent; color: var(--ink-2); outline: none; height: 28px; width: 54px; }
 .cl-toolbar .spacer { flex: 1; }
 .cl-editor-wrap { border: 1px solid var(--rule); border-radius: 0 0 var(--radius) var(--radius); min-height: 420px; background: var(--bg); }
 .cl-editor-wrap .ProseMirror {
@@ -498,8 +499,9 @@ h1,h2,h3,h4  { margin: 0; font-weight: 500; }
 
 /* Files */
 .files { display: flex; flex-direction: column; }
-.file-row { display: grid; grid-template-columns: 28px 1fr auto auto auto; gap: 14px; align-items: center; padding: 12px 4px; border-bottom: 1px solid var(--rule); }
-.file-row:hover { background: var(--bg-sunk); border-radius: var(--radius-sm); }
+.file-row { display: flex; gap: 10px; align-items: center; padding: 10px 8px; border-radius: var(--radius-sm); border-bottom: 1px solid var(--rule); }
+.file-row:hover { background: var(--bg-sunk); }
+.file-row-active { background: var(--accent-soft) !important; }
 .file-ic { width: 28px; height: 34px; border: 1px solid var(--rule-2); border-radius: 4px; background: var(--bg-2); display: grid; place-items: center; font-family: var(--font-mono); font-size: 8px; color: var(--ink-3); font-weight: 500; flex-shrink: 0; }
 .file-row b { font-size: 13px; color: var(--ink); font-weight: 500; }
 .file-row .file-meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); white-space: nowrap; }

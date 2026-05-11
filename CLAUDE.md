@@ -139,11 +139,12 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | GET/PUT/DELETE | /api/jobs/:id | Single job CRUD |
 | PUT | /api/jobs/:id/move | Move to kanban column |
 | POST | /api/jobs/:id/ai-score | Score job against CV |
-| POST | /api/jobs/:id/fetch-description | Scrape description, logo, posting_date, job_type from source_url; auto-scores in background |
+| POST | /api/jobs/:id/fetch-description | Scrape description, logo, posting_date, job_type, salary from source_url; auto-scores in background |
 | GET/POST | /api/jobs/:id/chat | Per-card Claude chat |
 | POST | /api/jobs/:id/cover-letter | Generate cover letter |
-| POST | /api/jobs/:id/export-pdf | Export cover letter as PDF |
-| POST | /api/jobs/:id/export-word | Export as .docx |
+| POST | /api/jobs/:id/export-pdf | Export cover letter as PDF (Playwright-based, saves to uploads/cover-letters/) |
+| POST | /api/jobs/:id/export-word | Export as .docx (saves to uploads/cover-letters/) |
+| GET | /api/jobs/:id/files/:fileId/serve | Serve file inline or as download (`?download=1`) |
 | POST/DELETE | /api/jobs/:id/files | File attachments |
 | GET/POST/DELETE | /api/chat | Global Claude chat |
 | POST | /api/cv/upload?profile=tech\|hospitality | Upload CV PDF |
@@ -185,15 +186,19 @@ Cron schedule: `src/backend/cron.js` — daily scrape 7:00 NZST, housekeeping 2:
 
 Scraper reads `scraper_location`, `scraper_keywords_tech`, `scraper_keywords_hospitality`, `scraper_max_age_days` from settings to build search URLs. Seek uses `daterange` param for age filtering. Saves `last_sync_{source}` setting on completion.
 
-Extracts per job from search results: title, company, location, url, job_type, posting_date.
+Extracts per job from search results: title, company, location, url, job_type (normalised), posting_date.
+Duplicate check: skips insert if same title + company + source already exists.
 
 ### fetch-description (on-demand, per job)
 
 `POST /api/jobs/:id/fetch-description` — launches Playwright, visits `source_url`, extracts:
-- Description HTML (cleaned: keeps p/ul/ol/li/strong/em/h1-h4/a, strips everything else)
-- Company logo URL
-- Posting date (refined from detail page)
-- Job type (refined from detail page)
+- Description HTML (cleaned: keeps p/ul/ol/li/strong/em/h1-h4/a; block elements converted to `<p>` before stripping)
+- Company logo URL (scoped to job header element to avoid picking up featured job logos)
+- Posting date (prefers `datetime` attribute on `<time>` elements; converts "Xd ago" to real date)
+- Job type (normalised via `normaliseJobType()`)
+- Salary (only stored if value contains a dollar figure or salary range; benefits text discarded)
+
+Files deleted outside the app (via File Explorer) are automatically cleaned from DB when the job is next loaded.
 
 Uses `waitUntil: 'load'` + 1.5s settle delay (not networkidle — too slow on Seek).
 After saving, auto-scores in background via `scoreFit()` (non-blocking).
@@ -202,8 +207,16 @@ Description is stored as cleaned HTML and rendered with `dangerouslySetInnerHTML
 
 ### Board filtering
 
-Filter chips above the kanban: source chips + category chips (All/Tech/Hospitality/General).
-Frontend-only, no DB queries. Board sorts by `created_at DESC` within each column.
+Filter chips above the kanban (all frontend-only, no DB queries):
+- **Source** chips — one per source in use
+- **Category** chips — All / Tech / Hospitality / General
+- **Job type** chips — All / Full time / Part time / Contract/Temp / Casual / Internship (only shows types present in current jobs)
+
+Board sorts by `created_at DESC` within each column.
+
+### Job type normalisation
+
+`normaliseJobType()` in both `scraper.js` and `jobs.js` maps Seek's inconsistent labels to standard values: `Full time`, `Part time`, `Contract/Temp`, `Casual`, `Internship`.
 
 ## Known issues
 

@@ -7,6 +7,17 @@ const { log } = require('../services/logger');
 const { scoreFit, generateCoverLetter, jobChat } = require('../services/ai');
 const { autoTag } = require('../services/autoTag');
 
+function normaliseJobType(raw) {
+  if (!raw) return '';
+  const s = raw.toLowerCase().replace(/[-_]/g, ' ').trim();
+  if (s.includes('full')) return 'Full time';
+  if (s.includes('part')) return 'Part time';
+  if (s.includes('contract') || s.includes('temp')) return 'Contract/Temp';
+  if (s.includes('casual')) return 'Casual';
+  if (s.includes('intern')) return 'Internship';
+  return raw.trim();
+}
+
 function cvForJob(job) {
   const cat = job.job_category;
   if (cat === 'tech')        return getSetting('cv_text_tech')        || getSetting('cv_text') || '';
@@ -81,7 +92,13 @@ router.get('/:id', (req, res) => {
   const job = getDb().prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
   if (!job) return res.status(404).json({ error: 'Not found' });
   job.skills_gaps = job.skills_gaps ? JSON.parse(job.skills_gaps) : [];
-  const files = getDb().prepare('SELECT * FROM job_files WHERE job_id = ? ORDER BY created_at DESC').all(req.params.id);
+  const allFiles = getDb().prepare('SELECT * FROM job_files WHERE job_id = ? ORDER BY created_at DESC').all(req.params.id);
+  // Remove DB records for files deleted outside the app
+  const files = allFiles.filter(f => {
+    if (fs.existsSync(f.file_path)) return true;
+    getDb().prepare('DELETE FROM job_files WHERE id = ?').run(f.id);
+    return false;
+  });
   res.json({ ...job, files });
 });
 
@@ -191,16 +208,18 @@ router.post('/:id/export-pdf', async (req, res) => {
 
   try {
     const dir = uploadsDir('cover-letters');
-    const filename = `CoverLetter_${(job.company||'').replace(/\s/g,'_')}_${Date.now()}.pdf`;
+    const dateStr = new Date().toISOString().slice(0,16).replace('T','_').replace(':','-');
+    const filename = `CoverLetter_${(job.company||'').replace(/\s/g,'_')}_${dateStr}.pdf`;
     const filePath = await exportCoverLetterPDF(html || `<p>${job.cover_letter}</p>`, dir, filename);
 
     const stat = require('fs').statSync(filePath);
     const db = getDb();
-    db.prepare('INSERT INTO job_files (job_id, filename, original_name, file_type, file_size, file_path) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(req.params.id, filename, filename, 'pdf', stat.size, filePath);
+    const insert = db.prepare('INSERT INTO job_files (job_id, filename, original_name, file_type, file_size, file_path) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(req.params.id, filename, filename, 'application/pdf', stat.size, filePath);
+    const fileRecord = db.prepare('SELECT * FROM job_files WHERE id = ?').get(insert.lastInsertRowid);
 
     log({ type: 'activity', trigger: 'MANUAL', action: 'COVER-LETTER-EXPORTED-PDF', jobTitle: job.title, company: job.company });
-    res.json({ filename, path: filePath });
+    res.json({ filename, path: filePath, file: fileRecord });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -214,16 +233,18 @@ router.post('/:id/export-word', async (req, res) => {
 
   try {
     const dir = uploadsDir('cover-letters');
-    const filename = `CoverLetter_${(job.company||'').replace(/\s/g,'_')}_${Date.now()}.docx`;
+    const dateStr = new Date().toISOString().slice(0,16).replace('T','_').replace(':','-');
+    const filename = `CoverLetter_${(job.company||'').replace(/\s/g,'_')}_${dateStr}.docx`;
     const filePath = await exportCoverLetterDocx(html || job.cover_letter || '', dir, filename);
 
     const stat = require('fs').statSync(filePath);
     const db = getDb();
-    db.prepare('INSERT INTO job_files (job_id, filename, original_name, file_type, file_size, file_path) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(req.params.id, filename, filename, 'docx', stat.size, filePath);
+    const insert = db.prepare('INSERT INTO job_files (job_id, filename, original_name, file_type, file_size, file_path) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(req.params.id, filename, filename, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', stat.size, filePath);
+    const fileRecord = db.prepare('SELECT * FROM job_files WHERE id = ?').get(insert.lastInsertRowid);
 
     log({ type: 'activity', trigger: 'MANUAL', action: 'COVER-LETTER-EXPORTED-WORD', jobTitle: job.title, company: job.company });
-    res.json({ filename, path: filePath });
+    res.json({ filename, path: filePath, file: fileRecord });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -250,6 +271,7 @@ router.post('/:id/fetch-description', async (req, res) => {
   let logoUrl     = '';
   let postingDate = '';
   let jobType     = '';
+  let salary      = '';
 
   try {
     const { chromium } = require('playwright');
@@ -315,49 +337,94 @@ router.post('/:id/fetch-description', async (req, res) => {
         return el.innerHTML.trim();
       }
 
-      // Posting date & job type from detail page
+      // Posting date, job type, salary from detail page
       const postedEl = document.querySelector('[data-automation="job-detail-date"]') ||
                        document.querySelector('[data-automation="jobPostDate"]') ||
+                       document.querySelector('[data-automation="jobListingDate"]') ||
+                       document.querySelector('time[datetime]') ||
                        document.querySelector('time');
-      const postingDate = postedEl?.textContent?.trim() || postedEl?.getAttribute('datetime') || '';
+
+      function resolveDate(el) {
+        if (!el) return '';
+        // Prefer machine-readable datetime attribute
+        const iso = el.getAttribute('datetime');
+        if (iso) {
+          const d = new Date(iso);
+          if (!isNaN(d)) {
+            const now = new Date();
+            return d.toLocaleDateString('en-NZ', {
+              day: 'numeric', month: 'short',
+              year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+            });
+          }
+        }
+        // Fall back to text — convert relative strings to real dates
+        const txt = el.textContent.trim();
+        const dMatch = txt.match(/^(\d+)\s*d(?:ays?)?\s+ago/i);
+        if (dMatch) {
+          const d = new Date();
+          d.setDate(d.getDate() - parseInt(dMatch[1]));
+          return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+        }
+        const hMatch = txt.match(/^(\d+)\s*h(?:ours?)?\s+ago/i);
+        if (hMatch) return new Date().toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+        return txt;
+      }
+      const postingDate = resolveDate(postedEl);
 
       const jobTypeEl = document.querySelector('[data-automation="job-detail-work-type"]') ||
                         document.querySelector('[data-automation="workType"]') ||
                         document.querySelector('[class*="workType"]');
       const jobType = jobTypeEl?.textContent?.trim() || '';
 
-      // Logo
-      const logoEl = document.querySelector('[data-automation="company-logo"] img') ||
-                     document.querySelector('[class*="CompanyLogo"] img') ||
-                     document.querySelector('[class*="company-logo"] img') ||
-                     document.querySelector('[class*="companyLogo"] img') ||
-                     document.querySelector('header img[src*="logo"]') ||
-                     document.querySelector('header img[src*="company"]');
+      const salaryEl = document.querySelector('[data-automation="job-detail-salary"]') ||
+                       document.querySelector('[data-automation="salary"]') ||
+                       document.querySelector('[class*="salary"]') ||
+                       document.querySelector('[class*="Salary"]');
+      const rawSalary = salaryEl?.textContent?.trim() || '';
+      // Only keep if it looks like an actual salary figure (contains $ or digits with k/hr/year)
+      const salary = /(\$[\d,]+|[\d,]+k|\d+\s*(per\s*(hour|hr|year|annum|pa)|p\.h\.|p\.a\.))/i.test(rawSalary) ? rawSalary : '';
+
+      // Logo — scoped to the job header only to avoid picking up logos from
+      // featured/recommended jobs sections further down the page
+      const jobHeader = document.querySelector('[data-automation="job-detail-header"]') ||
+                        document.querySelector('[data-automation="jobDetailsHeader"]') ||
+                        document.querySelector('[data-automation="job-detail-page"]')?.firstElementChild ||
+                        document.querySelector('main > *:first-child') ||
+                        document.querySelector('header');
+      const scope = jobHeader || document;
+      const logoEl = scope.querySelector('[data-automation="company-logo"] img') ||
+                     scope.querySelector('[class*="CompanyLogo"] img') ||
+                     scope.querySelector('[class*="company-logo"] img') ||
+                     scope.querySelector('[class*="companyLogo"] img') ||
+                     scope.querySelector('img[src*="logo"]') ||
+                     scope.querySelector('img[src*="company"]');
       const logoUrl = logoEl?.src || '';
 
       // Description
       const seekDesc = document.querySelector('[data-automation="jobAdDetails"]') ||
                        document.querySelector('[data-automation="job-detail-page-job-description"]');
-      if (seekDesc) return { html: cleanEl(seekDesc), logoUrl, postingDate, jobType };
+      if (seekDesc) return { html: cleanEl(seekDesc), logoUrl, postingDate, jobType, salary };
 
       const tmDesc = document.querySelector('.tm-markdown') ||
                      document.querySelector('[class*="job-description"]');
-      if (tmDesc) return { html: cleanEl(tmDesc), logoUrl, postingDate, jobType };
+      if (tmDesc) return { html: cleanEl(tmDesc), logoUrl, postingDate, jobType, salary };
 
       const generic = document.querySelector('#jobDescriptionText') ||
                       document.querySelector('[class*="description"]') ||
                       document.querySelector('[class*="job-body"]') ||
                       document.querySelector('article') ||
                       document.querySelector('main');
-      if (!generic) return { html: '', logoUrl, postingDate, jobType };
+      if (!generic) return { html: '', logoUrl, postingDate, jobType, salary };
       const html = cleanEl(generic);
-      return { html: html.length > 12000 ? html.slice(0, 12000) : html, logoUrl, postingDate, jobType };
+      return { html: html.length > 12000 ? html.slice(0, 12000) : html, logoUrl, postingDate, jobType, salary };
     });
 
     description   = result.html;
     logoUrl       = result.logoUrl || '';
     postingDate   = result.postingDate || '';
-    jobType       = result.jobType || '';
+    jobType       = normaliseJobType(result.jobType || '');
+    salary        = result.salary || '';
     await browser.close();
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -369,11 +436,13 @@ router.post('/:id/fetch-description', async (req, res) => {
   db2.prepare(`UPDATE jobs SET description = ?, logo_url = ?,
     ${postingDate ? 'posting_date = ?,' : ''}
     ${jobType && !job.job_type ? 'job_type = ?,' : ''}
+    salary = ?,
     updated_at = datetime('now') WHERE id = ?`)
     .run(
       description, logoUrl,
       ...(postingDate ? [postingDate] : []),
       ...(jobType && !job.job_type ? [jobType] : []),
+      salary,
       job.id
     );
 
@@ -393,6 +462,19 @@ router.post('/:id/fetch-description', async (req, res) => {
   }).catch(() => {});
 
   res.json({ ok: true, description, logoUrl });
+});
+
+// GET /api/jobs/:id/files/:fileId/serve — serve file inline or as download
+router.get('/:id/files/:fileId/serve', (req, res) => {
+  const file = getDb().prepare('SELECT * FROM job_files WHERE id = ? AND job_id = ?').get(req.params.fileId, req.params.id);
+  if (!file) return res.status(404).json({ error: 'Not found' });
+  if (!fs.existsSync(file.file_path)) return res.status(404).json({ error: 'File not found on disk' });
+  const inline = req.query.download !== '1';
+  const disposition = inline ? 'inline' : 'attachment';
+  res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(file.original_name)}"`);
+  res.setHeader('Content-Type', file.file_type || 'application/octet-stream');
+  res.setHeader('Content-Length', fs.statSync(file.file_path).size);
+  fs.createReadStream(file.file_path).pipe(res);
 });
 
 // DELETE /api/jobs/:id/files/:fileId

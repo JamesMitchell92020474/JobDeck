@@ -4,13 +4,15 @@ A personal job search dashboard for the NZ market. Scrapes Seek, Trade Me Jobs, 
 
 ## Features
 
-- **Kanban board** — Shortlisted → Applied → Interview → Offer → Rejected → Archived
-- **Automated scraping** — Seek, Trade Me Jobs, Jora, Indeed scraped daily at 7:00 NZST using your keywords and location
-- **AI fit scoring** — Each job scored 0–100 against your CV via Claude, with a match summary, skills gaps, and deadline extraction
-- **Rich job descriptions** — Fetched on demand from the source listing, rendered as formatted HTML with company logo
-- **Dual CV profiles** — Separate CVs for Tech/IT and Hospitality/Retail roles; AI uses the right one automatically
-- **Cover letter generation** — Claude writes a tailored cover letter using your CV and a template you define
-- **Dashboard** — Weekly activity line chart, pipeline counts, source breakdown, upcoming deadlines
+- **Kanban board** — Shortlisted → Applied → Interview → Offer → Rejected → Archived, with drag-and-drop
+- **Automated scraping** — Seek, Trade Me Jobs, Jora, Indeed scraped daily at 7:00 NZST using your keywords, location and max job age
+- **Board filters** — Filter by source, category (Tech/Hospitality/General) and job type (Full time/Part time/Contract/Temp etc.)
+- **AI fit scoring** — Each job scored 0–100 against your CV via Claude, with match summary, skills gaps, and deadline extraction
+- **Rich job descriptions** — Fetched on demand from the source listing; rendered as formatted HTML with company logo, salary, posting date and job type
+- **Dual CV profiles** — Separate CVs for Tech/IT and Hospitality/Retail; AI uses the right one automatically
+- **Cover letter generation** — Claude writes a tailored cover letter; export as PDF or Word directly to the Files tab
+- **File preview** — PDFs preview inline in the Files tab; all files downloadable
+- **Dashboard** — Weekly listings vs applications line chart, pipeline counts, source breakdown, upcoming deadlines
 - **Manual job entry** — Add jobs from any source via the quick-add form on the board
 
 ## Prerequisites

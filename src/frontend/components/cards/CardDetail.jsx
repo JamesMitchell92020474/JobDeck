@@ -97,6 +97,7 @@ export default function CardDetail({ jobId, setRoute }) {
             <div className="v">{job.deadline || <span style={{ color: 'var(--ink-3)' }}>None set</span>}</div>
           </div>
           <div><div className="k">Type</div><div className="v">{job.job_type || '—'}</div></div>
+          <div style={{ gridColumn: '1/-1' }}><div className="k">Salary</div><div className="v">{job.salary || '—'}</div></div>
           <div style={{ gridColumn: '1/-1' }}>
             <div className="k">Category</div>
             <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -115,9 +116,6 @@ export default function CardDetail({ jobId, setRoute }) {
               </select>
             </div>
           </div>
-          {job.salary && (
-            <div style={{ gridColumn: '1/-1' }}><div className="k">Salary</div><div className="v">{job.salary}</div></div>
-          )}
           {job.source_url && (
             <div style={{ gridColumn: '1/-1' }}>
               <div className="k">Listing</div>
@@ -194,10 +192,10 @@ export default function CardDetail({ jobId, setRoute }) {
 
         <div className="tab-body">
           {tab === 'Overview'     && <OverviewTab    job={job} saveJob={saveJob} descFetching={descFetching} descError={descError} onRefetchDesc={() => fetchDescription(job.id)} />}
-          {tab === 'Cover Letter' && <CoverLetterTab job={job} saveJob={saveJob} />}
+          {tab === 'Cover Letter' && <CoverLetterTab job={job} saveJob={saveJob} onFileExported={file => { setJob(prev => ({ ...prev, files: [...(prev.files || []), file] })); setFileCount(c => c + 1) }} />}
           {tab === 'Chat'         && <ChatTab        job={job} onCountChange={setChatCount} />}
           {tab === 'Notes'        && <NotesTab       job={job} saveJob={saveJob} />}
-          {tab === 'Files'        && <FilesTab       job={job} onCountChange={setFileCount} />}
+          {tab === 'Files'        && <FilesTab       job={job} onCountChange={setFileCount} onFilesChange={files => setJob(prev => ({ ...prev, files }))} />}
         </div>
       </div>
     </div>
