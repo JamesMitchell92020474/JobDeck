@@ -7,7 +7,7 @@ const router = express.Router();
 // GET /api/stats
 router.get('/', (req, res) => {
   const db = getDb();
-  const cols = ['Shortlisted','Applied','Interview','Offer','Rejected','Archived'];
+  const cols = ['New','Interested','Applied','Interview','Offer','Rejected','Archived'];
   const counts = {};
   for (const c of cols) {
     counts[c] = db.prepare('SELECT COUNT(*) as n FROM jobs WHERE status = ? AND is_soft_deleted = 0').get(c).n;
@@ -78,7 +78,7 @@ router.get('/', (req, res) => {
 router.get('/welcome', async (req, res) => {
   try {
     const db = getDb();
-    const cols = ['Shortlisted','Applied','Interview','Offer'];
+    const cols = ['New','Interested','Applied','Interview','Offer'];
     const stats = {};
     for (const c of cols) {
       stats[c.toLowerCase()] = db.prepare('SELECT COUNT(*) as n FROM jobs WHERE status = ? AND is_soft_deleted = 0').get(c).n;

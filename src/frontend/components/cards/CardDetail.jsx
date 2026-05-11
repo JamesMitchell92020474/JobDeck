@@ -9,11 +9,12 @@ import ChatTab        from './tabs/ChatTab'
 import NotesTab       from './tabs/NotesTab'
 import FilesTab       from './tabs/FilesTab'
 
-const COLUMNS = ['Shortlisted', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived']
+const COLUMNS = ['New', 'Interested', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived']
 const COL_COLORS = {
-  Shortlisted: 'var(--col-shortlisted)', Applied: 'var(--col-applied)',
-  Interview:   'var(--col-interview)',   Offer:   'var(--col-offer)',
-  Rejected:    'var(--col-rejected)',    Archived: 'var(--col-archived)',
+  New:        'var(--col-new)',        Interested: 'var(--col-interested)',
+  Applied:    'var(--col-applied)',    Interview:  'var(--col-interview)',
+  Offer:      'var(--col-offer)',      Rejected:   'var(--col-rejected)',
+  Archived:   'var(--col-archived)',
 }
 const TABS = ['Overview', 'Cover Letter', 'Chat', 'Notes', 'Files']
 

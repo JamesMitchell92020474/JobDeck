@@ -46,7 +46,7 @@ function LineChart({ data, maxVal }) {
   )
 }
 
-const COLUMNS = ['Shortlisted', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived']
+const COLUMNS = ['New', 'Interested', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived']
 
 export default function Dashboard({ setRoute, setDetailJobId }) {
   const { jobs, getSourceColors } = useApp()
@@ -63,7 +63,7 @@ export default function Dashboard({ setRoute, setDetailJobId }) {
 
   const activeJobs = jobs.filter(j => !j.is_soft_deleted)
   const counts = COLUMNS.reduce((acc, c) => { acc[c] = activeJobs.filter(j => j.status === c).length; return acc }, {})
-  const shortlisted = activeJobs.filter(j => j.status === 'Shortlisted').slice(0, 4)
+  const newJobs = activeJobs.filter(j => j.status === 'New').slice(0, 4)
   const deadlines   = activeJobs
     .filter(j => j.deadline && j.deadline !== '—')
     .sort((a, b) => a.deadline?.localeCompare(b.deadline))
@@ -89,8 +89,8 @@ export default function Dashboard({ setRoute, setDetailJobId }) {
   const dayStr = new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' })
 
   const pipeDeltas = {
-    Shortlisted: statsData?.recent ? `+${statsData.recent} new` : '—',
-    Applied: '—', Interview: '—', Offer: '—', Rejected: '—', Archived: '—',
+    New: statsData?.recent ? `+${statsData.recent} today` : '—',
+    Interested: '—', Applied: '—', Interview: '—', Offer: '—', Rejected: '—', Archived: '—',
   }
 
   return (
@@ -177,16 +177,16 @@ export default function Dashboard({ setRoute, setDetailJobId }) {
         <div className="card">
           <div className="card-head">
             <div>
-              <div className="eyebrow" style={{ marginBottom: 6 }}>Latest shortlisted</div>
-              <div className="card-title">{shortlisted.length} jobs added recently</div>
+              <div className="eyebrow" style={{ marginBottom: 6 }}>Latest new</div>
+              <div className="card-title">{newJobs.length} unreviewed listings</div>
             </div>
             <span className="btn btn-ghost btn-sm" onClick={() => setRoute('board')}>
               View all <Icon name="external" size={11} />
             </span>
           </div>
-          {shortlisted.length > 0 ? (
+          {newJobs.length > 0 ? (
             <div className="jobs-strip">
-              {shortlisted.map(j => (
+              {newJobs.map(j => (
                 <div key={j.id} className="job-mini" onClick={() => { setDetailJobId(j.id); setRoute('detail') }}>
                   <div className="job-mini-top">
                     <div>
@@ -203,7 +203,7 @@ export default function Dashboard({ setRoute, setDetailJobId }) {
             </div>
           ) : (
             <div style={{ color: 'var(--ink-3)', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>
-              No shortlisted jobs yet — sync a source or add a job manually.
+              No new listings — sync a source or add a job manually.
             </div>
           )}
         </div>

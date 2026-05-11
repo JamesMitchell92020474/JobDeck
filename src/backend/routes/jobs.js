@@ -71,8 +71,8 @@ router.get('/', (req, res) => {
 router.post('/', (req, res) => {
   const { title, company, location, source, source_url, description, salary, job_type,
           deadline, posting_date, expiry_date, is_remote, is_hybrid, status, job_category: reqCategory } = req.body;
-  const VALID_STATUSES = ['Shortlisted','Applied','Interview','Offer','Rejected','Archived'];
-  const resolvedStatus = VALID_STATUSES.includes(status) ? status : 'Shortlisted';
+  const VALID_STATUSES = ['New','Interested','Applied','Interview','Offer','Rejected','Archived'];
+  const resolvedStatus = VALID_STATUSES.includes(status) ? status : 'Interested';
   const job_category = reqCategory || autoTag(title, description);
   const db = getDb();
   const r = db.prepare(`
@@ -85,6 +85,42 @@ router.post('/', (req, res) => {
   const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(r.lastInsertRowid);
   log({ type: 'activity', trigger: 'MANUAL', action: 'ADDED', jobTitle: title, company, source: source || 'Manual' });
   res.json(job);
+});
+
+// POST /api/jobs/filter-new — score unscored New jobs and archive poor fits
+router.post('/filter-new', async (req, res) => {
+  const { threshold = 40 } = req.body;
+  const db = getDb();
+  const newJobs = db.prepare('SELECT * FROM jobs WHERE status = ? AND is_soft_deleted = 0').all('New');
+  if (newJobs.length === 0) return res.json({ archived: [], kept: 0, scored: 0 });
+
+  const archived = [];
+  let scored = 0;
+
+  for (const job of newJobs) {
+    let fitScore = job.fit_score;
+
+    if (fitScore == null && job.description) {
+      try {
+        const cvText = cvForJob(job);
+        if (cvText) {
+          const result = await scoreFit(job.description, cvText);
+          fitScore = result.fit_score;
+          db.prepare(`UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?, updated_at = datetime('now') WHERE id = ?`)
+            .run(result.fit_score, result.summary, JSON.stringify(result.skills_gaps || []), job.id);
+          scored++;
+        }
+      } catch {}
+    }
+
+    if (fitScore != null && fitScore < threshold) {
+      db.prepare("UPDATE jobs SET status = 'Archived', updated_at = datetime('now') WHERE id = ?").run(job.id);
+      log({ type: 'activity', trigger: 'AI', action: 'ARCHIVED', jobTitle: job.title, company: job.company, source: job.source, reason: `AI filter: fit score ${fitScore} below threshold ${threshold}` });
+      archived.push({ id: job.id, title: job.title, company: job.company, fit_score: fitScore });
+    }
+  }
+
+  res.json({ archived, kept: newJobs.length - archived.length, scored });
 });
 
 // GET /api/jobs/:id

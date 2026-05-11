@@ -10,7 +10,8 @@ const CAT = {
 }
 
 const COL_COLORS = {
-  shortlisted: 'var(--col-shortlisted)',
+  new:         'var(--col-new)',
+  interested:  'var(--col-interested)',
   applied:     'var(--col-applied)',
   interview:   'var(--col-interview)',
   offer:       'var(--col-offer)',

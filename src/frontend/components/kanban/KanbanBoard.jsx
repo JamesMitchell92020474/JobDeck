@@ -9,8 +9,8 @@ import AddJobModal from '../cards/AddJobModal'
 import { useApp } from '../../context/AppContext'
 import api from '../../hooks/useApi'
 
-const COLUMNS = ['Shortlisted', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived']
-const COL_VAR = { Shortlisted: 'shortlisted', Applied: 'applied', Interview: 'interview', Offer: 'offer', Rejected: 'rejected', Archived: 'archived' }
+const COLUMNS = ['New', 'Interested', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived']
+const COL_VAR = { New: 'new', Interested: 'interested', Applied: 'applied', Interview: 'interview', Offer: 'offer', Rejected: 'rejected', Archived: 'archived' }
 
 export default function KanbanBoard({ setRoute, setDetailJobId }) {
   const { jobs, setJobs, settings, getSourceColors } = useApp()
@@ -18,8 +18,10 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
   const [srcFilter,   setSrcFilter]   = useState('All')
   const [catFilter,   setCatFilter]   = useState('All')
   const [typeFilter,  setTypeFilter]  = useState('All')
-  const [activeId,    setActiveId]    = useState(null)
-  const [addingToCol, setAddingToCol] = useState(null)
+  const [activeId,      setActiveId]      = useState(null)
+  const [addingToCol,   setAddingToCol]   = useState(null)
+  const [filteringNew,  setFilteringNew]  = useState(false)
+  const [filterResult,  setFilterResult]  = useState(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
   const kcStyle   = settings.card_style || 'edge'
@@ -56,6 +58,18 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
     setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: newStatus } : j))
     try { await api.put(`/jobs/${job.id}/move`, { status: newStatus }) } catch {}
   }, [jobs, setJobs])
+
+  const handleFilterNew = async () => {
+    setFilteringNew(true)
+    setFilterResult(null)
+    try {
+      const result = await api.post('/jobs/filter-new', { threshold: 40 })
+      const archivedIds = new Set(result.archived.map(j => j.id))
+      setJobs(prev => prev.map(j => archivedIds.has(j.id) ? { ...j, status: 'Archived' } : j))
+      setFilterResult({ archived: result.archived.length, kept: result.kept, scored: result.scored })
+    } catch {}
+    finally { setFilteringNew(false) }
+  }
 
   const activeJob = activeId ? jobs.find(j => j.id === activeId) : null
 
@@ -132,6 +146,9 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
                   srcColors={srcColors}
                   onCardClick={id => { setDetailJobId(id); setRoute('detail') }}
                   onAddJob={col => setAddingToCol(col)}
+                  onFilterNew={col === 'New' ? handleFilterNew : undefined}
+                  filteringNew={col === 'New' ? filteringNew : false}
+                  filterResult={col === 'New' ? filterResult : null}
                 />
               </SortableContext>
             )

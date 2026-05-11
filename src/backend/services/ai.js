@@ -23,12 +23,12 @@ async function complete(prompt, { model = SONNET, system } = {}) {
 }
 
 async function generateWelcome(stats, userName) {
-  const { shortlisted, applied, interview, offer, upcomingDeadlines, recentMatches } = stats;
+  const { new: newCount, interested, applied, interview, offer, upcomingDeadlines, recentMatches } = stats;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
 
   const prompt = `Generate a warm, concise 1-2 sentence personalised welcome message for ${userName}'s job search dashboard.
-Current stats: ${shortlisted} shortlisted, ${applied} applied, ${interview} in interview, ${offer} offers.
+Current stats: ${newCount} new (unreviewed), ${interested} interested, ${applied} applied, ${interview} in interview, ${offer} offers.
 Recent: ${recentMatches} new matches in the last 24h. Upcoming deadlines: ${upcomingDeadlines} in next 7 days.
 Time of day: ${greeting}. NZ context. Be specific and encouraging but not sycophantic. Output plain text only, no markdown.`;
 

@@ -99,7 +99,8 @@ Theme is applied via `data-mode` attribute on `<html>` (NOT `data-theme`).
 Density via `data-density`. Both set in `AppContext.jsx`.
 
 Column colours (CSS vars):
-- `--col-shortlisted` #FFC107 (yellow)
+- `--col-new`         #6B7FD4 (soft periwinkle)
+- `--col-interested`  #FFC107 (yellow)
 - `--col-applied`     #0D6EFD (blue)
 - `--col-interview`   #DC3545 (red)
 - `--col-offer`       #198754 (green)
@@ -136,6 +137,7 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | GET | /api/stats | Dashboard counts, activity (NZ timezone), sources |
 | GET | /api/stats/welcome | AI-generated welcome message |
 | GET/POST | /api/jobs | List / create jobs |
+| POST | /api/jobs/filter-new | Score unscored New jobs and archive poor fits (threshold: fit_score < 40) |
 | GET/PUT/DELETE | /api/jobs/:id | Single job CRUD |
 | PUT | /api/jobs/:id/move | Move to kanban column |
 | POST | /api/jobs/:id/ai-score | Score job against CV |
@@ -158,11 +160,20 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 
 ## Kanban columns
 
-Order: Shortlisted → Applied → Interview → Offer → Rejected → Archived
+Order: New → Interested → Applied → Interview → Offer → Rejected → Archived
 
-- **Archived** — aged out (30d), expired, or manually dismissed. Housekeeping moves jobs here automatically.
+- **New** — scraper landing column. All scraped jobs arrive here for triage.
+- **Interested** — jobs the user has chosen to pursue. Manually added jobs default here.
+- **Archived** — aged out (30d), expired, manually dismissed, or AI-filtered (poor fit). Housekeeping moves jobs here automatically.
 - **Rejected** — applied and didn't get it (user-initiated only).
 - Housekeeping soft-deletes jobs in either Archived or Rejected after 90 days.
+
+### AI filter (New column)
+
+"Filter" button in the New column header calls `POST /api/jobs/filter-new`:
+1. Scores any unscored New jobs that have a fetched description
+2. Archives all New jobs with `fit_score < 40`
+3. Returns `{ archived, kept, scored }` — shown inline below the column header
 
 ## Job categories
 
@@ -188,6 +199,7 @@ Scraper reads `scraper_location`, `scraper_keywords_tech`, `scraper_keywords_hos
 
 Extracts per job from search results: title, company, location, url, job_type (normalised), posting_date.
 Duplicate check: skips insert if same title + company + source already exists.
+Scraped jobs default to status **New**. Manually added jobs default to **Interested**.
 
 ### fetch-description (on-demand, per job)
 

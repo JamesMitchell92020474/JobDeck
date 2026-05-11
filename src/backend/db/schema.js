@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   location     TEXT,
   source       TEXT,
   source_url   TEXT,
-  status       TEXT NOT NULL DEFAULT 'Shortlisted',
+  status       TEXT NOT NULL DEFAULT 'New',
   posting_date TEXT,
   expiry_date  TEXT,
   description  TEXT,

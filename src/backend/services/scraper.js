@@ -332,7 +332,7 @@ function saveJobsToDB(jobs) {
 
   const insert = db.prepare(`
     INSERT OR IGNORE INTO jobs (title, company, location, source, source_url, status, job_category, job_type, posting_date)
-    VALUES (?, ?, ?, ?, ?, 'Shortlisted', ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, 'New', ?, ?, ?)
   `);
 
   db.exec('BEGIN');

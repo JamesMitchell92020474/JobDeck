@@ -20,6 +20,14 @@ function getDb() {
   // Migrations for existing DBs
   try { db.exec('ALTER TABLE jobs ADD COLUMN job_category TEXT DEFAULT NULL') } catch {}
   try { db.exec('ALTER TABLE jobs ADD COLUMN logo_url TEXT') } catch {}
+  // Rename Shortlisted → Interested, add New as scraper landing column
+  try { db.exec("UPDATE jobs SET status = 'Interested' WHERE status = 'Shortlisted'") } catch {}
+  // One-time: reset all active (non-archived) jobs to New for fresh triage
+  const newWorkflowV2 = db.prepare("SELECT value FROM settings WHERE key = 'migrated_new_workflow_v2'").get();
+  if (!newWorkflowV2) {
+    db.exec("UPDATE jobs SET status = 'New' WHERE status NOT IN ('Archived', 'Rejected') AND is_soft_deleted = 0");
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('migrated_new_workflow_v2', '1');
+  }
 
   // Seed default settings
   const defaults = {
