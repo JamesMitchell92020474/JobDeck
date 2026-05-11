@@ -295,6 +295,14 @@ h1,h2,h3,h4  { margin: 0; font-weight: 500; }
 .dash-action-note { font-size: 11px; font-family: var(--font-mono); color: var(--ink-3); }
 
 /* News feed */
+/* Job card badges */
+.kc-badge { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 100px; font-size: 10.5px; font-family: var(--font-mono); font-weight: 500; border: 1px solid transparent; }
+.kc-badge--warn { background: var(--warn-soft); color: #6B4A00; border-color: var(--warn); }
+[data-mode="dark"] .kc-badge--warn { color: var(--warn); }
+.kc-badge--due { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.job-mini-posted { font-size: 11px; font-family: var(--font-mono); color: var(--ink-3); margin-top: 2px; }
+
+/* News feed */
 .news-feed { display: flex; flex-direction: column; }
 .news-item { display: flex; align-items: baseline; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--rule); text-decoration: none; color: inherit; }
 .news-item:last-child { border-bottom: none; }

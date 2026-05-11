@@ -30,6 +30,14 @@ function relativeDate(dateStr) {
   return `${Math.floor(days / 30)}mo ago`
 }
 
+function isExpiringSoon(expiryDate) {
+  if (!expiryDate) return false
+  const d = new Date(expiryDate)
+  if (isNaN(d.getTime())) return false
+  const diff = d.getTime() - Date.now()
+  return diff > 0 && diff < 3 * 24 * 60 * 60 * 1000
+}
+
 export default function JobCard({ job, colVar, kcStyle, srcColors, onClick, isDragging }) {
   const { setJobs } = useApp()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSortableDragging } = useSortable({
@@ -86,28 +94,34 @@ export default function JobCard({ job, colVar, kcStyle, srcColors, onClick, isDr
         </div>
       </div>
 
-      {(job.source || job.job_category) && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {job.job_category && (
-            <Pill
-              style={CAT[job.job_category]?.style}
-              onClick={cycleCategory}
-              title="Click to change category"
-            >
-              {CAT[job.job_category]?.label}
-            </Pill>
-          )}
-          {job.source && (
-            <Pill style={srcColor ? { borderColor: srcColor, color: srcColor, background: `${srcColor}18` } : {}}>
-              {job.source}
-            </Pill>
-          )}
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        {job.job_category && (
+          <Pill
+            style={CAT[job.job_category]?.style}
+            onClick={cycleCategory}
+            title="Click to change category"
+          >
+            {CAT[job.job_category]?.label}
+          </Pill>
+        )}
+        {job.source && (
+          <Pill style={srcColor ? { borderColor: srcColor, color: srcColor, background: `${srcColor}18` } : {}}>
+            {job.source}
+          </Pill>
+        )}
+        {isExpiringSoon(job.expiry_date) && (
+          <span className="kc-badge kc-badge--warn">Expiring soon</span>
+        )}
+        {job.deadline && job.deadline !== '—' && (
+          <span className="kc-badge kc-badge--due">Due {job.deadline}</span>
+        )}
+      </div>
 
       <div className="kc-meta">
         <span className="kc-source">{job.job_type || ''}</span>
-        <span className="kc-date">{relativeDate(job.created_at)}</span>
+        <span className="kc-date">
+          {job.posting_date ? `Posted ${job.posting_date}` : relativeDate(job.created_at)}
+        </span>
       </div>
     </div>
   )

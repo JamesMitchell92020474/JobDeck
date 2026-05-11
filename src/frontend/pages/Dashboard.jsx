@@ -58,6 +58,14 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
   const [filterResult,   setFilterResult]   = useState(null)
   const newsTimer = useRef(null)
 
+  function isExpiringSoon(expiryDate) {
+    if (!expiryDate) return false
+    const d = new Date(expiryDate)
+    if (isNaN(d.getTime())) return false
+    const diff = d.getTime() - Date.now()
+    return diff > 0 && diff < 3 * 24 * 60 * 60 * 1000
+  }
+
   function timeAgo(iso) {
     const diff = Date.now() - new Date(iso).getTime()
     const m = Math.floor(diff / 60000)
@@ -223,9 +231,18 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
                     </div>
                     {j.fit_score != null && <Fit value={j.fit_score} />}
                   </div>
-                  <div className="tags">
-                    <Pill>{j.source}</Pill>
+                  <div className="tags" style={{ flexWrap: 'wrap', gap: 5 }}>
+                    {j.source && <Pill>{j.source}</Pill>}
+                    {isExpiringSoon(j.expiry_date) && (
+                      <span className="kc-badge kc-badge--warn">Expiring soon</span>
+                    )}
+                    {j.deadline && j.deadline !== '—' && (
+                      <span className="kc-badge kc-badge--due">Due {j.deadline}</span>
+                    )}
                   </div>
+                  {j.posting_date && (
+                    <div className="job-mini-posted">Posted {j.posting_date}</div>
+                  )}
                 </div>
               ))}
             </div>
