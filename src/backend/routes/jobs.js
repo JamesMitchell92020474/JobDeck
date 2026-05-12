@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { getDb, getSetting } = require('../db/database');
 const { log } = require('../services/logger');
-const { scoreFit, generateCoverLetter, jobChat } = require('../services/ai');
+const { scoreFit, generateCoverLetter, jobChat, interviewChat } = require('../services/ai');
 const { autoTag } = require('../services/autoTag');
 
 const { fetchDescriptionPage, normaliseJobType } = require('../services/fetchDescription');
@@ -100,8 +100,8 @@ router.post('/filter-new', async (req, res) => {
         if (cvText) {
           const result = await scoreFit(job.description, cvText);
           fitScore = result.fit_score;
-          db.prepare(`UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?, updated_at = datetime('now') WHERE id = ?`)
-            .run(result.fit_score, result.summary, JSON.stringify(result.skills_gaps || []), job.id);
+          db.prepare(`UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?, description_summary = ?, updated_at = datetime('now') WHERE id = ?`)
+            .run(result.fit_score, result.summary, JSON.stringify(result.skills_gaps || []), result.description_summary || null, job.id);
           scored++;
         }
       } catch {}
@@ -195,35 +195,45 @@ router.post('/:id/ai-score', async (req, res) => {
     const cvText = cvForJob(job);
     const result = await scoreFit(job.description || job.title, cvText);
     getDb().prepare(`
-      UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?, updated_at = datetime('now') WHERE id = ?
-    `).run(result.fit_score, result.summary, JSON.stringify(result.skills_gaps || []), req.params.id);
+      UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?, description_summary = ?, updated_at = datetime('now') WHERE id = ?
+    `).run(result.fit_score, result.summary, JSON.stringify(result.skills_gaps || []), result.description_summary || null, req.params.id);
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
+// GET /api/jobs/:id/chat-context — fetch CV text once at session start
+router.get('/:id/chat-context', (req, res) => {
+  const job = getDb().prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'Not found' });
+  res.json({ cvText: cvForJob(job) });
+});
+
 // GET /api/jobs/:id/chat
 router.get('/:id/chat', (req, res) => {
-  const msgs = getDb().prepare('SELECT * FROM job_chat WHERE job_id = ? ORDER BY created_at ASC').all(req.params.id);
+  const mode = req.query.mode || 'chat';
+  const msgs = getDb().prepare('SELECT * FROM job_chat WHERE job_id = ? AND mode = ? ORDER BY created_at ASC').all(req.params.id, mode);
   res.json(msgs);
 });
 
 // POST /api/jobs/:id/chat
 router.post('/:id/chat', async (req, res) => {
-  const { content } = req.body;
+  const { content, mode = 'chat', cvText: clientCvText } = req.body;
   const db = getDb();
   const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
   if (!job) return res.status(404).json({ error: 'Not found' });
 
-  db.prepare('INSERT INTO job_chat (job_id, role, content) VALUES (?, ?, ?)').run(req.params.id, 'user', content);
+  db.prepare('INSERT INTO job_chat (job_id, role, content, mode) VALUES (?, ?, ?, ?)').run(req.params.id, 'user', content, mode);
 
   try {
-    const history = db.prepare('SELECT role, content FROM job_chat WHERE job_id = ? ORDER BY created_at ASC').all(req.params.id);
-    const cvText = cvForJob(job);
-    const { text, model } = await jobChat(history, job, cvText);
-    db.prepare('INSERT INTO job_chat (job_id, role, content, model) VALUES (?, ?, ?, ?)').run(req.params.id, 'assistant', text, model);
-    res.json({ role: 'assistant', content: text, model });
+    const history = db.prepare('SELECT role, content FROM job_chat WHERE job_id = ? AND mode = ? ORDER BY created_at ASC').all(req.params.id, mode);
+    const cvText = clientCvText ?? cvForJob(job);
+    const { text, model: aiModel } = mode === 'interview'
+      ? await interviewChat(history, job, cvText)
+      : await jobChat(history, job, cvText);
+    db.prepare('INSERT INTO job_chat (job_id, role, content, model, mode) VALUES (?, ?, ?, ?, ?)').run(req.params.id, 'assistant', text, aiModel, mode);
+    res.json({ role: 'assistant', content: text, model: aiModel });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -358,11 +368,11 @@ router.post('/:id/fetch-description', async (req, res) => {
   scoreFit(description, cvForJob(freshJob)).then(result => {
     const hasDeadline = freshJob.deadline && freshJob.deadline.trim();
     getDb().prepare(`
-      UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?,
+      UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?, description_summary = ?,
         ${!hasDeadline && result.deadline ? 'deadline = ?,' : ''}
         updated_at = datetime('now') WHERE id = ?
     `).run(
-      result.fit_score, result.summary, JSON.stringify(result.skills_gaps || []),
+      result.fit_score, result.summary, JSON.stringify(result.skills_gaps || []), result.description_summary || null,
       ...(!hasDeadline && result.deadline ? [result.deadline] : []),
       job.id
     );

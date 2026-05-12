@@ -55,6 +55,12 @@ All settings are key-value pairs in the `settings` table.
 
 Migrations run in `database.js` via `try { db.exec('ALTER TABLE...') } catch {}` — add new columns there.
 
+Key schema additions (beyond initial schema):
+- `jobs.logo_url`, `jobs.job_category`, `jobs.description_summary` — added via migrations
+- `job_chat.mode TEXT DEFAULT 'chat'` — separates regular chat from interview history
+- `global_chat.session_id` — links messages to a named session
+- `global_chat_sessions (id, name, created_at)` — named chat sessions, max 20 kept
+
 **Transaction pattern** — `node:sqlite` has no `db.transaction()` wrapper. Use explicit:
 ```js
 db.exec('BEGIN');
@@ -136,7 +142,9 @@ top of the Overview tab. Not shown in the sidebar.
 
 API key loaded from `ANTHROPIC_API_KEY` env var, falls back to `api_key` DB setting.
 
-`scoreFit()` returns: `{ fit_score, summary, skills_gaps, deadline }` — deadline extracted from job description text in the same call, saved only if job doesn't already have one.
+`scoreFit()` returns: `{ fit_score, summary, skills_gaps, deadline, description_summary }` — all extracted in one call. `description_summary` is a 1-2 sentence plain-text overview of the role, stored on the job and used in global chat context to reduce token usage. Saved to `jobs.description_summary` by all four score-save sites (ai-score route, fetch-description background, filter-new route, scraper).
+
+`interviewChat(messages, job, cvText)` — mock interview mode for per-card chat. Claude plays the interviewer: asks one question at a time, gives feedback per answer, wraps up after 5-7 questions. Uses separate message history (`mode = 'interview'` on `job_chat` rows).
 
 `generateWelcome(stats, userName, weather)` — weather is fetched from Open-Meteo (Christchurch,
 no API key required) and passed in. Falls back gracefully if fetch fails. Includes correct
@@ -164,13 +172,20 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | PUT | /api/jobs/:id/move | Move to kanban column |
 | POST | /api/jobs/:id/ai-score | Score job against CV |
 | POST | /api/jobs/:id/fetch-description | Scrape description, logo, posting_date, job_type, salary from source_url; auto-scores in background |
-| GET/POST | /api/jobs/:id/chat | Per-card Claude chat |
+| GET | /api/jobs/:id/chat-context | Returns `{ cvText }` for the job — fetched once by the frontend on card open |
+| GET/POST | /api/jobs/:id/chat | Per-card Claude chat (`?mode=chat\|interview`; POST body includes `{ mode, cvText }`) |
 | POST | /api/jobs/:id/cover-letter | Generate cover letter |
 | POST | /api/jobs/:id/export-pdf | Export cover letter as PDF (Playwright-based, saves to uploads/cover-letters/) |
 | POST | /api/jobs/:id/export-word | Export as .docx (saves to uploads/cover-letters/) |
 | GET | /api/jobs/:id/files/:fileId/serve | Serve file inline or as download (`?download=1`) |
 | POST/DELETE | /api/jobs/:id/files | File attachments |
-| GET/POST/DELETE | /api/chat | Global Claude chat |
+| GET | /api/chat/sessions | List sessions newest-first, max 20, with message count |
+| POST | /api/chat/sessions | Create new session (name auto-set from first message) |
+| PATCH | /api/chat/sessions/:id | Rename session |
+| DELETE | /api/chat/sessions/:id | Delete session + all its messages (CASCADE) |
+| GET | /api/chat/context | Build and return job context string — fetched once by frontend per page load |
+| GET | /api/chat | Messages for a session (`?session_id=N`) |
+| POST | /api/chat | Send message (`{ content, session_id, context, deep_analysis }`) |
 | POST | /api/cv/upload?profile=tech\|hospitality | Upload CV PDF |
 | GET/PUT | /api/settings | Settings CRUD |
 | POST | /api/scrape | Trigger Playwright scrape |
@@ -180,6 +195,36 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | GET | /api/logs | Activity log viewer |
 | POST | /api/export/backup | Create zip backup |
 | GET/PUT | /api/export/cover-letter-template | Cover letter template |
+
+## Chat features
+
+### Global chat sessions
+Named sessions stored in `global_chat_sessions` table. Max 20 kept (oldest removed when exceeded). Session name is auto-set from the first 60 chars of the user's opening message; can be renamed inline (click the heading). The "Chats" dropdown lists all sessions; "+" creates a new one. Old `DELETE /api/chat` endpoint is gone — delete via `DELETE /api/chat/sessions/:id`.
+
+**Context caching**: on page load, the frontend fetches `GET /api/chat/context` once and stores it in React state (`jobContext`). Every subsequent message sends this stored string rather than triggering a DB query per message. The backend falls back to a fresh DB query if no context is provided.
+
+**Prompt caching**: `globalChat()` in `ai.js` sends the system prompt (which includes the full job pipeline with `description_summary` per job) as an array block with `cache_control: { type: "ephemeral" }`. Anthropic caches it for 5 minutes — subsequent turns in the same session pay ~10% of normal input token cost for that block.
+
+**Job context format**: up to 60 active jobs sorted by pipeline stage, each with title, company, location, status, category, fit score, deadline, and `description_summary` (or 300-char truncation of raw description as fallback).
+
+### Per-card chat
+Chat history is scoped by `mode` column on `job_chat`:
+- `mode = 'chat'` — regular Q&A (default)
+- `mode = 'interview'` — mock interview mode, separate history, uses `interviewChat()` system prompt
+
+The frontend fetches `GET /api/jobs/:id/chat-context` once on card open and passes `cvText` with every POST, avoiding repeated settings lookups.
+
+**Mock interview mode** — toggled via "Mock Interview" button in the chat tab header. Claude acts as the interviewer for that specific role, asks one question at a time with feedback, wraps up after 5-7 questions. Auto-begins on first open of an empty interview session.
+
+### Voice mode (`src/frontend/hooks/useSpeech.js`)
+Shared hook used by both `Chat.jsx` and `ChatTab.jsx`.
+
+- **Voice mode toggle** — clicking the mic button once enters continuous voice mode (mic auto-restarts after every response). Clicking again exits.
+- **Auto-restart logic**: a `useEffect([messages])` fires after each assistant message and restarts the mic 200ms later. If recognition times out naturally (no speech detected, `cancelRef` is still false), `onNaturalEnd` callback restarts immediately.
+- **Interrupt TTS**: mic starts 200ms after response regardless of whether TTS is still playing. Speaking immediately calls `stopSpeaking()` to cancel TTS.
+- **TTS text cleaning**: markdown stripped before synthesis (headings, bold, italic, code ticks, non-standard chars).
+- `speak(text, onNaturalEnd?)` — `onNaturalEnd` fires only on natural `onend` (not when `stopListening()` was called).
+- `startListening(onTranscript, onNaturalEnd?)` — `cancelRef` distinguishes user-cancelled from natural timeout.
 
 ## Kanban columns
 

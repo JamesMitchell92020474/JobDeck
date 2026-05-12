@@ -52,7 +52,8 @@ Return a JSON object with exactly these fields:
   "fit_score": <integer 0-100>,
   "summary": "<2-3 sentence match summary>",
   "skills_gaps": ["<gap 1>", "<gap 2>"],
-  "deadline": "<closing/application date as written in the ad e.g. '30 May 2025', or null if not mentioned>"
+  "deadline": "<closing/application date as written in the ad e.g. '30 May 2025', or null if not mentioned>",
+  "description_summary": "<1-2 sentence plain text overview of the role and its key requirements, written independently of the candidate>"
 }
 Return only valid JSON, no markdown.`;
 
@@ -94,20 +95,49 @@ Be concise, specific, and practically useful.`;
   return { text: res.content[0].text, model: SONNET };
 }
 
+async function interviewChat(messages, job, cvText) {
+  const client = getClient();
+  const system = `You are conducting a mock job interview for James Mitchell, who is applying for the role of ${job.title} at ${job.company}.
+
+Your goal is to help James prepare for the real interview. Rules:
+- Ask ONE question at a time — never ask multiple questions in one turn
+- After James answers, give 1-2 sentences of specific, constructive feedback, then ask the next question
+- Mix question types: behavioural (STAR method), role-specific/technical, and situational
+- Draw questions from the job description and the candidate's background where relevant
+- After 5-7 questions, wrap up with a brief overall assessment and 2-3 concrete improvement tips
+- Keep a professional but encouraging tone — you're a supportive interviewer, not adversarial
+
+If this is the opening message (James said "Start mock interview"), introduce yourself briefly, then ask your first question.
+
+Job description: ${(job.description || '').slice(0, 2000)}
+Candidate CV: ${(cvText || '').slice(0, 2000)}`;
+
+  const res = await client.messages.create({
+    model: SONNET,
+    max_tokens: 1024,
+    system,
+    messages: messages.map(m => ({ role: m.role, content: m.content })),
+  });
+  return { text: res.content[0].text, model: SONNET };
+}
+
 async function globalChat(messages, context, useOpus = false) {
   const client = getClient();
   const model = useOpus ? OPUS : SONNET;
-  const system = `You are a personal job search assistant for James Mitchell.
-${context}
-Be concise and practically useful.`;
 
   const res = await client.messages.create({
     model,
     max_tokens: 2048,
-    system,
+    system: [
+      {
+        type: 'text',
+        text: `You are a personal job search assistant for James Mitchell.\n${context}\nBe concise and practically useful.`,
+        cache_control: { type: 'ephemeral' },
+      },
+    ],
     messages: messages.map(m => ({ role: m.role, content: m.content })),
   });
   return { text: res.content[0].text, model };
 }
 
-module.exports = { complete, generateWelcome, scoreFit, generateCoverLetter, jobChat, globalChat, SONNET, OPUS };
+module.exports = { complete, generateWelcome, scoreFit, generateCoverLetter, jobChat, interviewChat, globalChat, SONNET, OPUS };

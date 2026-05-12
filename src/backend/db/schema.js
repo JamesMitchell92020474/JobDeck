@@ -58,8 +58,15 @@ CREATE TABLE IF NOT EXISTS job_chat (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS global_chat_sessions (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS global_chat (
   id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id       INTEGER REFERENCES global_chat_sessions(id) ON DELETE CASCADE,
   role             TEXT NOT NULL,
   content          TEXT NOT NULL,
   model            TEXT,

@@ -68,6 +68,25 @@ function getDb() {
     db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('migrated_retired_sources_v1', '1');
   }
 
+  // Add mode column to job_chat for separating interview vs regular chat history
+  try { db.exec("ALTER TABLE job_chat ADD COLUMN mode TEXT NOT NULL DEFAULT 'chat'") } catch {}
+  // Short AI-generated description summary for use in global chat context
+  try { db.exec('ALTER TABLE jobs ADD COLUMN description_summary TEXT') } catch {}
+
+  // Migrate global_chat to support named sessions (max 20, auto-named from first message)
+  const sessionsMigrated = db.prepare("SELECT value FROM settings WHERE key = 'migrated_chat_sessions_v1'").get();
+  if (!sessionsMigrated) {
+    try { db.exec('ALTER TABLE global_chat ADD COLUMN session_id INTEGER') } catch {}
+    const existingCount = db.prepare('SELECT COUNT(*) as n FROM global_chat').get().n;
+    if (existingCount > 0) {
+      const firstMsg = db.prepare('SELECT content FROM global_chat ORDER BY created_at ASC LIMIT 1').get();
+      const name = (firstMsg?.content || 'Previous chat').trim().slice(0, 60);
+      const r = db.prepare('INSERT INTO global_chat_sessions (name) VALUES (?)').run(name);
+      db.prepare('UPDATE global_chat SET session_id = ?').run(r.lastInsertRowid);
+    }
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('migrated_chat_sessions_v1', '1');
+  }
+
   // Seed default settings
   const defaults = {
     theme:           'light',

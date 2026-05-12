@@ -375,11 +375,11 @@ async function fetchDescriptionsForNewJobs(context, newJobs) {
         try {
           const scored = await scoreFit(result.html, cvText);
           const hasDeadline = job.deadline && job.deadline.trim();
-          db.prepare(`UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?,
+          db.prepare(`UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?, description_summary = ?,
             ${!hasDeadline && scored.deadline ? 'deadline = ?,' : ''}
             updated_at = datetime('now') WHERE id = ?`)
             .run(
-              scored.fit_score, scored.summary, JSON.stringify(scored.skills_gaps || []),
+              scored.fit_score, scored.summary, JSON.stringify(scored.skills_gaps || []), scored.description_summary || null,
               ...(!hasDeadline && scored.deadline ? [scored.deadline] : []),
               job.id
             );
