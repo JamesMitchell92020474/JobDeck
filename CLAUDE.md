@@ -98,7 +98,7 @@ Card styles: `.kc` + `[data-kc-style="edge|bordered|minimal"]` on `.kanban-shell
 Theme is applied via `data-mode` attribute on `<html>` (NOT `data-theme`). Manual only — no auto-toggle.
 Density via `data-density`. Both set in `AppContext.jsx`.
 
-Sidebar and topbar use hardcoded `#423A8E` (not the CSS variable) with white text — overrides are
+Sidebar and topbar use hardcoded `#2d4a63` (not the CSS variable) with white text — overrides are
 scoped directly in `.sidebar` and `.topbar` rules rather than via the design token system.
 
 Favicon: `src/frontend/favicon.svg` — indigo rounded square with white italic "JD" monogram.
