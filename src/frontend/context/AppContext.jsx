@@ -12,6 +12,8 @@ const DEFAULT_SETTINGS = {
   density: 'balanced',
   display_name: '',
   email: '',
+  cv_label_1: 'CV Profile 1',
+  cv_label_2: 'CV Profile 2',
   source_colors: JSON.stringify({
     Seek: '#3D5A80', 'Trade Me Jobs': '#2E7D5B',
   }),

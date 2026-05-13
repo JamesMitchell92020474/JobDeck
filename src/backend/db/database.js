@@ -95,6 +95,8 @@ function getDb() {
     body_font:       'Inter',
     card_style:      'edge',
     display_name:    '',
+    cv_label_1:      'CV Profile 1',
+    cv_label_2:      'CV Profile 2',
     email:           '',
     density:         'balanced',
     source_colors:   JSON.stringify({

@@ -39,7 +39,7 @@ function isExpiringSoon(expiryDate) {
 }
 
 export default function JobCard({ job, colVar, kcStyle, srcColors, onClick, isDragging }) {
-  const { setJobs } = useApp()
+  const { setJobs, settings } = useApp()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSortableDragging } = useSortable({
     id: job.id,
     disabled: isDragging, // overlay card is non-sortable
@@ -91,7 +91,7 @@ export default function JobCard({ job, colVar, kcStyle, srcColors, onClick, isDr
             onClick={cycleCategory}
             title="Click to change category"
           >
-            {CAT[job.job_category]?.label}
+            {job.job_category === 'tech' ? (settings.cv_label_1 || 'CV Profile 1') : (settings.cv_label_2 || 'CV Profile 2')}
           </Pill>
         )}
         {job.source && (

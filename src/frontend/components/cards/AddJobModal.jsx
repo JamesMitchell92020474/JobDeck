@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import Icon from '../ui/Icon'
 import api from '../../hooks/useApi'
+import { useApp } from '../../context/AppContext'
 
-const SOURCES    = ['Manual', 'Seek', 'Trade Me Jobs', 'LinkedIn', 'Other']
-const JOB_TYPES  = ['', 'Full-time', 'Part-time', 'Contract', 'Casual', 'Internship']
-const CATEGORIES = [{ value: '', label: 'Auto-detect' }, { value: 'tech', label: 'Tech / IT' }, { value: 'hospitality', label: 'Hospitality / Retail' }]
+const SOURCES   = ['Manual', 'Seek', 'Trade Me Jobs', 'LinkedIn', 'Other']
+const JOB_TYPES = ['', 'Full-time', 'Part-time', 'Contract', 'Casual', 'Internship']
 
 const EMPTY = {
   title: '', company: '', location: '', source: 'Manual', source_url: '',
@@ -13,6 +13,12 @@ const EMPTY = {
 }
 
 export default function AddJobModal({ initialStatus, onSaved, onCancel }) {
+  const { settings } = useApp()
+  const categories = [
+    { value: '', label: 'Auto-detect' },
+    { value: 'tech', label: settings.cv_label_1 || 'CV Profile 1' },
+    { value: 'hospitality', label: settings.cv_label_2 || 'CV Profile 2' },
+  ]
   const [form, setForm]     = useState(EMPTY)
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
@@ -108,7 +114,7 @@ export default function AddJobModal({ initialStatus, onSaved, onCancel }) {
             <div className="form-row">
               <label className="form-label">Category</label>
               <select className="input" value={form.job_category} onChange={e => set('job_category', e.target.value)}>
-                {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                {categories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
             </div>
             <div className="form-row">

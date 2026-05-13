@@ -143,7 +143,7 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
           ))}
         </div>
         <div className="filter-chips" style={{ borderLeft: '1px solid var(--rule)', paddingLeft: 10 }}>
-          {[['All', 'All'], ['tech', 'Tech'], ['hospitality', 'Hospitality'], ['general', 'General']].map(([val, label]) => (
+          {[['All', 'All'], ['tech', settings.cv_label_1 || 'CV Profile 1'], ['hospitality', settings.cv_label_2 || 'CV Profile 2'], ['general', 'General']].map(([val, label]) => (
             <span
               key={val}
               className={`filter-chip ${catFilter === val ? 'active' : ''}`}

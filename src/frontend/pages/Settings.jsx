@@ -251,7 +251,7 @@ export default function Settings() {
           </div>
         </div>
         <div className="set-row">
-          <div className="lbl">Tech keywords<small>Used for IT / tech job searches</small></div>
+          <div className="lbl">{settings.cv_label_1 || 'CV Profile 1'} keywords<small>Search terms for this job category</small></div>
           <input
             className="input"
             style={{ maxWidth: 480 }}
@@ -260,7 +260,7 @@ export default function Settings() {
           />
         </div>
         <div className="set-row">
-          <div className="lbl">Hospitality keywords<small>Used for hospitality / retail searches</small></div>
+          <div className="lbl">{settings.cv_label_2 || 'CV Profile 2'} keywords<small>Search terms for this job category</small></div>
           <input
             className="input"
             style={{ maxWidth: 480 }}
@@ -396,15 +396,26 @@ export default function Settings() {
           />
         </div>
         {[
-          { key: 'tech',        label: 'CV — Tech / IT',            desc: 'Used for software, engineering, and IT roles' },
-          { key: 'hospitality', label: 'CV — Hospitality / Retail',  desc: 'Used for hospitality, food service, and retail roles' },
-        ].map(({ key, label, desc }) => {
+          { key: 'tech',        labelKey: 'cv_label_1', fallback: 'CV Profile 1' },
+          { key: 'hospitality', labelKey: 'cv_label_2', fallback: 'CV Profile 2' },
+        ].map(({ key, labelKey, fallback }) => {
+          const profileLabel = settings[labelKey] || fallback
           const filename   = settings[`cv_filename_${key}`]
           const size       = settings[`cv_size_${key}`]
           const uploadedAt = settings[`cv_uploaded_at_${key}`]
           return (
             <div key={key} className="set-row">
-              <div className="lbl">{label}<small>{desc}</small></div>
+              <div className="lbl">
+                <input
+                  key={profileLabel}
+                  className="input"
+                  style={{ maxWidth: 200, fontSize: 13, marginBottom: 4 }}
+                  defaultValue={profileLabel}
+                  placeholder={fallback}
+                  onBlur={e => saveSetting(labelKey, e.target.value.trim() || fallback)}
+                />
+                <small>Label shown on job cards</small>
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 {filename ? (
                   <>

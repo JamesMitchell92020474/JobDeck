@@ -18,7 +18,7 @@ const COL_COLORS = {
 const TABS = ['Overview', 'Cover Letter', 'Chat', 'Notes', 'Files']
 
 export default function CardDetail({ jobId, setRoute }) {
-  const { jobs, setJobs } = useApp()
+  const { jobs, setJobs, settings } = useApp()
   const [job, setJob]         = useState(null)
   const [tab, setTab]         = useState('Overview')
   const [chatCount, setChatCount] = useState(0)
@@ -102,7 +102,7 @@ export default function CardDetail({ jobId, setRoute }) {
             <div className="k">Category</div>
             <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span>
-                {job.job_category === 'tech' ? 'Tech' : job.job_category === 'hospitality' ? 'Hospitality' : 'General'}
+                {job.job_category === 'tech' ? (settings.cv_label_1 || 'CV Profile 1') : job.job_category === 'hospitality' ? (settings.cv_label_2 || 'CV Profile 2') : 'General'}
               </span>
               <select
                 className="input"
@@ -110,8 +110,8 @@ export default function CardDetail({ jobId, setRoute }) {
                 value={job.job_category || ''}
                 onChange={e => saveJob({ job_category: e.target.value || null })}
               >
-                <option value="tech">Tech</option>
-                <option value="hospitality">Hospitality</option>
+                <option value="tech">{settings.cv_label_1 || 'CV Profile 1'}</option>
+                <option value="hospitality">{settings.cv_label_2 || 'CV Profile 2'}</option>
                 <option value="">General</option>
               </select>
             </div>
