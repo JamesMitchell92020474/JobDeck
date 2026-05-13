@@ -3,13 +3,15 @@ const path = require('path');
 const os = require('os');
 
 function createDataFolders() {
+  const home = os.homedir();
+  const dataPath = process.env.DATA_PATH || path.join(home, 'JobDeck', 'data');
   const paths = [
-    process.env.DATA_PATH || path.join('D:', 'JobDeck', 'data'),
-    path.join(process.env.DATA_PATH || path.join('D:', 'JobDeck', 'data'), 'uploads', 'cv'),
-    path.join(process.env.DATA_PATH || path.join('D:', 'JobDeck', 'data'), 'uploads', 'cover-letters'),
-    path.join(process.env.DATA_PATH || path.join('D:', 'JobDeck', 'data'), 'uploads', 'attachments'),
-    process.env.LOG_PATH    || path.join('D:', 'JobDeck', 'logs'),
-    process.env.BACKUP_PATH || path.join('D:', 'JobDeck', 'backups'),
+    dataPath,
+    path.join(dataPath, 'uploads', 'cv'),
+    path.join(dataPath, 'uploads', 'cover-letters'),
+    path.join(dataPath, 'uploads', 'attachments'),
+    process.env.LOG_PATH    || path.join(home, 'JobDeck', 'logs'),
+    process.env.BACKUP_PATH || path.join(home, 'JobDeck', 'backups'),
   ];
 
   for (const p of paths) {

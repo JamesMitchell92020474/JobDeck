@@ -16,17 +16,20 @@ src/
   electron/    Electron desktop wrapper
 ```
 
-Data lives on D: drive — created automatically on first run:
-- `D:\JobDeck\data\jd-database.db` — SQLite database
-- `D:\JobDeck\data\uploads\` — CV, cover letters, attachments
-- `D:\JobDeck\logs\` — rotating monthly log files
-- `D:\JobDeck\backups\` — zip backups
+Data paths default to `os.homedir()/JobDeck/...` if not set in `.env`. Set by the
+first-run setup wizard, or manually via Settings → Data & Storage.
+
+- `<DATA_PATH>/jd-database.db` — SQLite database
+- `<DATA_PATH>/uploads/` — CV, cover letters, attachments
+- `<LOG_PATH>/` — rotating monthly log files
+- `<BACKUP_PATH>/` — zip backups
 
 ## Running in dev
 
 ```powershell
 cd C:\Users\James\Projects\JobDeck
-npm run dev          # starts backend (nodemon) + Vite + Electron concurrently
+npm run dev:browser  # backend (nodemon) + Vite + opens browser — no Electron
+npm run dev          # backend + Vite + Electron
 ```
 
 Or separately:
@@ -48,9 +51,29 @@ npm start            # backend serves dist/ as static files on :3001
 `index.js` detects the `dist/` folder and serves it via `express.static`. A catch-all
 route returns `index.html` for any non-API path (required for React client-side routing).
 
-End users double-click **`JobDeck.bat`** which handles all of the above automatically,
-including first-time `npm install`, Playwright Chromium download, and `.env` creation.
-**`Update.bat`** is used after pulling new changes from GitHub (rebuilds the frontend).
+End users double-click **`JobDeck.bat`** — a thin wrapper that runs `JobDeck.ps1` via
+PowerShell (uses full user PATH, avoiding cmd.exe PATH limitations). On first run the
+setup wizard runs in the browser. **`Update.bat`** / **`Update.ps1`** rebuild and relaunch
+after pulling new changes from GitHub.
+
+The PS1 scripts must use ASCII-only characters — PowerShell 5.1 misparses non-ASCII
+characters (em dashes, box-drawing chars) in script files without a BOM.
+
+## First-run setup wizard
+
+`src/frontend/pages/SetupWizard.jsx` + `src/backend/routes/setup.js`
+
+`App.jsx` checks `GET /api/setup/status` before mounting `AppProvider`. If setup is
+needed (no DB at current DATA_PATH and `SETUP_COMPLETE !== 'true'`), it renders the
+wizard instead of the main app — no DB is initialised during setup.
+
+**Step 1 — Storage paths**: DATA_PATH, BACKUP_PATH, LOG_PATH (defaults to homedir).
+**Step 2 — Profile**: display name, location, API key, optional desktop shortcut.
+
+On submit: `POST /api/setup/complete` writes `.env`, creates a desktop `.lnk` shortcut
+(via PowerShell WScript.Shell) if requested, spawns a fresh Node process with clean env,
+and exits with code 42. `JobDeck.ps1` loops on exit code 42 (restart signal).
+The frontend polls `GET /api/health` until the new process is up, then reloads.
 
 ## Vite config note
 
@@ -61,7 +84,7 @@ The proxy `/api → http://localhost:3001` is configured in vite.config.js.
 ## Database
 
 Uses Node.js 24 built-in `node:sqlite` (no native compilation). NOT `better-sqlite3`.
-DB path: `D:\JobDeck\data\jd-database.db`
+DB path: `<DATA_PATH>/jd-database.db`
 Schema: `src/backend/db/schema.js`
 Connection: `src/backend/db/database.js`
 
@@ -108,6 +131,10 @@ catch (e) { db.exec('ROLLBACK'); }
 | `last_sync_{source}` | ISO timestamp of last successful sync per source |
 | `cv_label_1` | Display name for the first CV profile (default: "CV Profile 1") |
 | `cv_label_2` | Display name for the second CV profile (default: "CV Profile 2") |
+| `backup_path` | Override for backup directory (falls back to BACKUP_PATH env var) |
+| `log_path` | Override for log directory (falls back to LOG_PATH env var) |
+| `ai_filter_threshold` | Fit score below which AI filter archives jobs (default: 40) |
+| `log_retention_mb` | Max log folder size in MB before oldest files are deleted (default: 50) |
 
 ## Design system
 
@@ -127,7 +154,12 @@ scoped directly in `.sidebar` and `.topbar` rules rather than via the design tok
 
 Favicon: `src/frontend/favicon.svg` — indigo rounded square with white italic "JD" monogram.
 
-Column colours (CSS vars):
+**Kanban card colours** — cards use source colours (not column colours). Each card sets
+`--src-color` as a CSS custom property; the edge bar and bordered left-border both read it.
+Column header dots still use the column colours (`--col-*`) for status wayfinding.
+Jobs with no recognised source fall back to `var(--ink-4)`.
+
+Column colours (CSS vars, used on column header dots only):
 - `--col-new`         #6B7FD4 (soft periwinkle)
 - `--col-interested`  #FFC107 (yellow)
 - `--col-applied`     #0D6EFD (blue)
@@ -174,16 +206,21 @@ route: 'dash' | 'board' | 'detail' | 'chat' | 'settings'
 ```
 `detailJobId` holds the current job ID when `route === 'detail'`.
 
+`App.jsx` checks `GET /api/setup/status` before mounting `AppProvider`. If setup is
+needed, renders `<SetupWizard />` instead of the main app.
+
 Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 
 ## API routes
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | /api/setup/status | Returns `{ needed, defaults }` — checked before app mounts |
+| POST | /api/setup/complete | Writes .env, creates desktop shortcut, restarts server |
 | GET | /api/stats | Dashboard counts, activity (NZ timezone), sources |
 | GET | /api/stats/welcome | AI-generated welcome message |
 | GET/POST | /api/jobs | List / create jobs |
-| POST | /api/jobs/filter-new | Score unscored New jobs and archive poor fits (threshold: fit_score < 40) |
+| POST | /api/jobs/filter-new | Score unscored New jobs and archive poor fits (reads `ai_filter_threshold` setting) |
 | GET/PUT/DELETE | /api/jobs/:id | Single job CRUD |
 | PUT | /api/jobs/:id/move | Move to kanban column |
 | POST | /api/jobs/:id/ai-score | Score job against CV |
@@ -213,7 +250,7 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | POST | /api/housekeeping/cleanup-unmatched | Remove scraped jobs not matching keywords+location (`{ dryRun: bool }`) |
 | GET | /api/news | Merged Hacker News (Algolia API) + Geekzone NZ headlines (30min cache, max 7 days old) |
 | GET | /api/logs | Activity log viewer |
-| POST | /api/export/backup | Create zip backup |
+| POST | /api/export/backup | Create zip backup (reads `backup_path` setting) |
 | GET/PUT | /api/export/cover-letter-template | Cover letter template |
 
 ## Chat features
@@ -260,7 +297,7 @@ Order: New → Interested → Applied → Interview → Offer → Rejected → A
 
 "Filter with AI" button appears in both the kanban toolbar and the dashboard quick-actions row. Calls `POST /api/jobs/filter-new`:
 1. Scores any unscored New jobs that have a fetched description
-2. Archives all New jobs with `fit_score < 40`
+2. Archives all New jobs with `fit_score < ai_filter_threshold` (default 40, configurable in Settings → AI)
 3. Kicks off background Playwright fetch for any New jobs missing descriptions — scores and auto-archives them when done
 4. Returns `{ archived, kept, scored, fetching }` — shown as an inline result note next to the button
 
@@ -294,6 +331,9 @@ News feed auto-refreshes every 30 minutes via `setInterval`.
 Dashboard content is centred (`margin: 0 auto`) and offset by half the sidebar width via
 `transform: translateX(calc(var(--sidebar-w) / -2))` to appear centred on the full screen.
 
+Deadline date display uses 3-letter abbreviations for both day names (Wed) and month names (May)
+via `abbr = s => /^[A-Za-z]+$/.test(s) ? s.slice(0, 3) : s` applied to each part.
+
 ## Scraping
 
 Playwright scrapers in `src/backend/services/scraper.js`.
@@ -313,7 +353,7 @@ Scraped jobs default to status **New**. Manually added jobs default to **Interes
 
 **Post-scrape description fetch** — after saving new jobs, `fetchDescriptionsForNewJobs(context, newJobs)`
 runs in the background using the same browser session. Fetches description, awaits `scoreFit`, then
-auto-archives poor fits (< 40). Browser closes when done. Logs `FETCH-DESC-START`, `FETCH-DESC-JOB [n/total]`,
+auto-archives poor fits (< threshold). Browser closes when done. Logs `FETCH-DESC-START`, `FETCH-DESC-JOB [n/total]`,
 `FETCH-DESC-DONE`, `FETCH-DESC-ERROR` for visibility.
 
 ### fetchDescription service
@@ -376,15 +416,21 @@ ESET may also block Playwright's Chromium. Add to exclusions:
 
 ## Env vars (.env)
 
+Generated by the setup wizard on first run. All path vars default to `os.homedir()/JobDeck/...`
+if empty, so the app works on any machine regardless of drive layout.
+
 ```
 ANTHROPIC_API_KEY=      # required for AI features
-DATA_PATH=D:\JobDeck\data
-LOG_PATH=D:\JobDeck\logs
-BACKUP_PATH=D:\JobDeck\backups
+DATA_PATH=              # defaults to %USERPROFILE%\JobDeck\data
+LOG_PATH=               # defaults to %USERPROFILE%\JobDeck\logs
+BACKUP_PATH=            # defaults to %USERPROFILE%\JobDeck\backups
+DISPLAY_NAME=           # seeded into display_name DB setting on first run
+SCRAPER_LOCATION=       # seeded into scraper_location DB setting on first run
 PORT=3001
-NODE_ENV=development
+NODE_ENV=production
 LOW_DISK_WARNING_GB=2
 ACCENT_COLOR=#423A8E
+SETUP_COMPLETE=true     # set by wizard; prevents wizard from showing again
 ```
 
 ## User preferences

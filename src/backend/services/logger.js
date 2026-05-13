@@ -6,7 +6,8 @@ const LOG_TYPES = ['housekeeping', 'activity', 'scraper', 'errors'];
 const MAX_LOG_FOLDER_MB = 50;
 
 function getLogPath() {
-  return process.env.LOG_PATH || path.join('D:', 'JobDeck', 'logs');
+  const { getSetting } = require('../db/database');
+  return getSetting('log_path') || process.env.LOG_PATH || path.join('D:', 'JobDeck', 'logs');
 }
 
 function ensureLogDir() {
@@ -30,13 +31,15 @@ function writeToFile(type, line) {
 
 function enforceFolderCap() {
   try {
+    const { getSetting } = require('../db/database');
+    const maxMb = parseInt(getSetting('log_retention_mb') || String(MAX_LOG_FOLDER_MB), 10);
     const dir = getLogPath();
     const files = fs.readdirSync(dir)
       .map(f => ({ name: f, p: path.join(dir, f), stat: fs.statSync(path.join(dir, f)) }))
       .sort((a, b) => a.stat.mtimeMs - b.stat.mtimeMs);
 
     let totalBytes = files.reduce((s, f) => s + f.stat.size, 0);
-    while (totalBytes > MAX_LOG_FOLDER_MB * 1024 * 1024 && files.length > 0) {
+    while (totalBytes > maxMb * 1024 * 1024 && files.length > 0) {
       const oldest = files.shift();
       fs.unlinkSync(oldest.p);
       totalBytes -= oldest.stat.size;

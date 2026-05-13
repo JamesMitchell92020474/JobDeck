@@ -65,7 +65,7 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
     setFilteringNew(true)
     setFilterResult(null)
     try {
-      const result = await api.post('/jobs/filter-new', { threshold: 40 })
+      const result = await api.post('/jobs/filter-new', {})
       const archivedIds = new Set(result.archived.map(j => j.id))
       setJobs(prev => prev.map(j => archivedIds.has(j.id) ? { ...j, status: 'Archived' } : j))
       setFilterResult({ archived: result.archived.length, kept: result.kept, scored: result.scored })

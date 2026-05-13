@@ -5,6 +5,7 @@
   "main": "src/electron/main.js",
   "scripts": {
     "dev": "concurrently -n \"BE,FE,EL\" -c \"blue,green,cyan\" \"npm run dev:be\" \"npm run dev:fe\" \"npm run dev:el\"",
+    "dev:browser": "concurrently -n \"BE,FE\" -c \"blue,green\" \"npm run dev:be\" \"npm run dev:fe -- --open\"",
     "dev:be": "nodemon --quiet --watch src/backend src/backend/index.js",
     "dev:fe": "vite",
     "dev:el": "wait-on tcp:5173 tcp:3001 && electron .",

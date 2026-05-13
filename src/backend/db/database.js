@@ -16,7 +16,7 @@ function getDb() {
 
   // Work out where to store the database file.
   // Uses the DATA_PATH environment variable, or a default path on the D: drive.
-  const dataPath = process.env.DATA_PATH || path.join('D:', 'JobDeck', 'data');
+  const dataPath = process.env.DATA_PATH || path.join(require('os').homedir(), 'JobDeck', 'data');
   const dbPath   = path.join(dataPath, 'jd-database.db');
 
   // Create the folder if it doesn't exist yet (the { recursive: true } option
@@ -125,7 +125,8 @@ function getDb() {
     display_font:    'Cambria',
     body_font:       'Inter',
     card_style:      'edge',
-    display_name:    '',           // user fills this in via Settings
+    display_name:      process.env.DISPLAY_NAME || '',
+    scraper_location:  process.env.SCRAPER_LOCATION || 'Christchurch',
     cv_label_1:      'CV Profile 1',
     cv_label_2:      'CV Profile 2',
     density:         'balanced',

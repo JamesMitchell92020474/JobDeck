@@ -549,6 +549,29 @@ export default function Settings() {
           <input className="input" style={{ maxWidth: 360 }} defaultValue={settings.data_path || 'D:\\JobDeck\\data'} disabled />
         </div>
         <div className="set-row">
+          <div className="lbl">Backup path<small>Where zip backups are saved</small></div>
+          <input
+            className="input"
+            style={{ maxWidth: 360 }}
+            defaultValue={settings.backup_path || 'D:\\JobDeck\\backups'}
+            onBlur={e => saveSetting('backup_path', e.target.value)}
+          />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Log path<small>Where rotating monthly log files are written</small></div>
+          <input
+            className="input"
+            style={{ maxWidth: 360 }}
+            defaultValue={settings.log_path || 'D:\\JobDeck\\logs'}
+            onBlur={e => saveSetting('log_path', e.target.value)}
+          />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <button className="btn btn-sm" onClick={exportBackup}>
+            <Icon name="download" size={11} /> Export backup
+          </button>
+        </div>
+        <div className="set-row">
           <div className="lbl">Low disk warning</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <input className="input" style={{ maxWidth: 80 }} type="number" min={1}
@@ -556,11 +579,6 @@ export default function Settings() {
               onBlur={e => saveSetting('low_disk_gb', e.target.value)} />
             <span style={{ color: 'var(--ink-3)', fontSize: 13 }}>GB</span>
           </div>
-        </div>
-        <div>
-          <button className="btn btn-sm" onClick={exportBackup}>
-            <Icon name="download" size={11} /> Export backup
-          </button>
         </div>
       </div>
 
@@ -585,6 +603,21 @@ export default function Settings() {
             onClick={() => saveSetting('deep_analysis', settings.deep_analysis === '1' ? '0' : '1')}
           />
         </div>
+        <div className="set-row">
+          <div className="lbl">AI filter threshold<small>Archive New jobs with a fit score below this value</small></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              className="input"
+              style={{ maxWidth: 80 }}
+              type="number"
+              min="1"
+              max="99"
+              defaultValue={settings.ai_filter_threshold || '40'}
+              onBlur={e => saveSetting('ai_filter_threshold', e.target.value)}
+            />
+            <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>/ 100</span>
+          </div>
+        </div>
       </div>
 
       {/* Cover letter template */}
@@ -597,6 +630,20 @@ export default function Settings() {
       {/* Log viewer */}
       <div className="set-group">
         <h3>Log viewer</h3>
+        <div className="set-row" style={{ marginBottom: 16 }}>
+          <div className="lbl">Log storage cap<small>Oldest log files are deleted when this limit is exceeded</small></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              className="input"
+              style={{ maxWidth: 80 }}
+              type="number"
+              min="1"
+              defaultValue={settings.log_retention_mb || '50'}
+              onBlur={e => saveSetting('log_retention_mb', e.target.value)}
+            />
+            <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>MB</span>
+          </div>
+        </div>
         {!logsLoaded ? (
           <button className="btn btn-sm" onClick={loadLogs}><Icon name="database" size={11} /> Load logs</button>
         ) : (

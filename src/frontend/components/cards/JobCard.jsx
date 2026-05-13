@@ -9,15 +9,6 @@ const CAT = {
   hospitality: { label: 'Hospitality', style: { borderColor: '#E07B39',       color: '#E07B39',        background: '#E07B3918' } },
 }
 
-const COL_COLORS = {
-  new:         'var(--col-new)',
-  interested:  'var(--col-interested)',
-  applied:     'var(--col-applied)',
-  interview:   'var(--col-interview)',
-  offer:       'var(--col-offer)',
-  rejected:    'var(--col-rejected)',
-}
-
 function relativeDate(dateStr) {
   if (!dateStr) return ''
   const d = new Date(dateStr)
@@ -38,21 +29,21 @@ function isExpiringSoon(expiryDate) {
   return diff > 0 && diff < 3 * 24 * 60 * 60 * 1000
 }
 
-export default function JobCard({ job, colVar, kcStyle, srcColors, onClick, isDragging }) {
+export default function JobCard({ job, kcStyle, srcColors, onClick, isDragging }) {
   const { setJobs, settings } = useApp()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSortableDragging } = useSortable({
     id: job.id,
     disabled: isDragging, // overlay card is non-sortable
   })
 
+  const srcColor = srcColors?.[job.source] || 'var(--ink-4)'
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isSortableDragging ? 0.4 : 1,
+    '--src-color': srcColor,
   }
-
-  const edgeColor = COL_COLORS[colVar] || 'var(--accent)'
-  const srcColor  = srcColors?.[job.source]
 
   const cycleCategory = (e) => {
     e.stopPropagation()
@@ -73,7 +64,7 @@ export default function JobCard({ job, colVar, kcStyle, srcColors, onClick, isDr
       onClick={onClick}
     >
       {kcStyle === 'edge' && (
-        <span className="edge-bar" style={{ background: edgeColor }} aria-hidden />
+        <span className="edge-bar" style={{ background: srcColor }} aria-hidden />
       )}
 
       <div className="kc-top">

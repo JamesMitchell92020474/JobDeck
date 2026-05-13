@@ -9,7 +9,7 @@ AI-powered job search dashboard for Windows. Scrapes Seek and Trade Me Jobs, sco
 **Pipeline**
 - Kanban board — New → Interested → Applied → Interview → Offer → Rejected → Archived
 - AI fit scoring (0–100) against your CV with summary and skills gaps
-- One-click AI filter — scores all new listings, archives poor fits automatically
+- One-click AI filter — scores all new listings, archives poor fits automatically (configurable threshold)
 - Playwright scraper for Seek and Trade Me Jobs (daily schedule + manual trigger)
 - Full description fetch per job — extracts salary, job type, and posting date
 
@@ -22,12 +22,12 @@ AI-powered job search dashboard for Windows. Scrapes Seek and Trade Me Jobs, sco
 **Documents**
 - AI cover letter generation with a custom style template
 - Export as PDF or Word
-- Two CV profiles with configurable labels (e.g. "Tech / IT" and "Sales")
+- Two CV profiles with configurable labels (e.g. "Tech / IT" and "Retail / Hospitality")
 
 **Other**
 - Dashboard with welcome message, pipeline stats, news feed, and weather
 - Activity logs, zip backups, dark mode, accent colour customisation
-- All personal details configured via Settings — no hardcoding in the code
+- All personal details configured via the setup wizard and Settings — no hardcoding in the code
 
 ---
 
@@ -45,7 +45,7 @@ AI-powered job search dashboard for Windows. Scrapes Seek and Trade Me Jobs, sco
 
 ### Step 1 — Get the code
 
-**Option A — Git (recommended if you want easy updates):**
+**Option A — Git (recommended, makes updates easy):**
 ```
 git clone https://github.com/JamesMitchell92020474/JobDeck.git
 ```
@@ -64,47 +64,35 @@ On first run it will automatically:
 2. Install all packages (`npm install`)
 3. Download the scraper browser (Playwright Chromium, ~150 MB — once only)
 4. Build the app
-5. Create a `.env` file and open it in Notepad
+5. Open the app in your browser
 
 ---
 
-### Step 3 — Add your API key
+### Step 3 — Setup wizard
 
-In Notepad, find this line:
-```
-ANTHROPIC_API_KEY=
-```
-Paste your key from [console.anthropic.com](https://console.anthropic.com) after the `=` sign.
+The first time the app opens, a setup wizard will guide you through:
 
-**If your PC has no D: drive**, also change `DATA_PATH`:
-```
-DATA_PATH=C:\JobDeck\data
-```
-(and update `LOG_PATH` and `BACKUP_PATH` to match)
+- **Storage paths** — where to store data, backups, and logs (defaults to `C:\Users\<you>\JobDeck\...` — works on any PC regardless of drive layout)
+- **Your name** — used in the dashboard greeting and AI prompts
+- **Location** — your city, used for job searches and weather
+- **API key** — your Anthropic API key for all AI features
+- **Desktop shortcut** — optionally adds a JobDeck icon to your desktop
 
-Save and close Notepad, then double-click **`JobDeck.bat`** again. Your browser will open to the app.
+Click **Finish setup** and the app restarts automatically. You're ready to go.
 
 ---
 
-### Step 4 — Configure Settings
+### Step 4 — Upload your CVs
 
-Go to **Settings** (bottom of the sidebar) and fill in:
-
-| Setting | What it is |
-|---|---|
-| **Your name** | Used in AI prompts and the welcome message |
-| **Location** | Your city — used for scraping and weather |
-| **CV Profile 1 / 2** | Name your two CV profiles (e.g. "Tech / IT") then upload the PDFs |
-| **Profile keywords** | Keywords used to search for jobs in each category |
-| **Accent colour** | Pick a colour you like |
+Go to **Settings → Profile & CV** and upload PDF versions of your CVs. You can have two profiles (e.g. "Tech / IT" and "Retail / Hospitality") — JobDeck uses whichever matches the job category when scoring and generating cover letters.
 
 ---
 
 ## Daily use
 
-- **Double-click `JobDeck.bat`** to start the app each day. Close the "JobDeck Server" window to stop it.
+- **Double-click `JobDeck.bat`** to start the app each day. Close the server window to stop it.
 - **Sync Sources** (dashboard) — scrapes Seek and Trade Me for new listings matching your keywords
-- **Filter with AI** — scores all new listings and archives anything below 40% fit
+- **Filter with AI** — scores all new listings and archives anything below the configured fit threshold
 - **Job cards** — click any job to see the full description, chat with Claude about it, or start a mock interview
 
 ---
@@ -113,8 +101,8 @@ Go to **Settings** (bottom of the sidebar) and fill in:
 
 When new changes are published to GitHub:
 
-1. Download the updated code (or `git pull` if you used Git)
-2. Double-click **`Update.bat`** — it installs new packages, rebuilds, and relaunches
+1. Pull the latest code (`git pull`, or download the ZIP again)
+2. Double-click **`Update.bat`** — it installs new packages, rebuilds, and relaunches automatically
 
 ---
 
@@ -126,18 +114,21 @@ C:\Users\<your username>\AppData\Local\ms-playwright\
 ```
 In ESET: Advanced Setup → Protections → Real-time file system protection → Exclusions → use "Path" type.
 
-**No D: drive** — see Step 3 above to change the data path to C:.
+**Browser shows a blank page or error** — make sure the server window is open and didn't show any errors. Try refreshing after a few seconds.
 
-**Browser shows a blank page or error** — make sure the "JobDeck Server" window is open and didn't show any errors. Try refreshing after a few seconds.
+**AI features not working** — go to Settings → AI and check that your Anthropic API key is entered correctly.
 
-**AI features not working** — check that `ANTHROPIC_API_KEY` is set correctly in your `.env` file, with no spaces around the `=`.
+**Want to change your data path** — go to Settings → Data & Storage. Note that changing `DATA_PATH` after first run requires restarting the server.
 
 ---
 
 ## Development
 
-If you want to work on the code:
-
 ```powershell
-npm run dev    # hot reload — backend on :3001, frontend on :5173
+npm run dev:browser   # backend + Vite, opens browser automatically (no Electron)
+npm run dev           # backend + Vite + Electron
+npm run dev:be        # backend only (nodemon, port 3001)
+npm run dev:fe        # Vite only (port 5173)
 ```
+
+The app works fully in the browser at `http://localhost:5173` in dev mode. Vite proxies `/api` to the backend on `:3001`.

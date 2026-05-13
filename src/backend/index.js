@@ -1,4 +1,4 @@
-require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env'), override: true });
 
 const express = require('express');
 const cors = require('cors');
@@ -14,8 +14,11 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Serve uploaded files
-const dataPath = process.env.DATA_PATH || path.join('D:', 'JobDeck', 'data');
+const dataPath = process.env.DATA_PATH || path.join(require('os').homedir(), 'JobDeck', 'data');
 app.use('/uploads', express.static(path.join(dataPath, 'uploads')));
+
+// Setup route — must be before other routes, requires no DB
+app.use('/api/setup', require('./routes/setup').router);
 
 // Routes
 app.use('/api/jobs',         require('./routes/jobs'));

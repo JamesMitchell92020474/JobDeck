@@ -446,6 +446,7 @@ h1,h2,h3,h4  { margin: 0; font-weight: 500; }
 /* Card style variants */
 [data-kc-style="edge"] .kc { padding-top: 16px; }
 [data-kc-style="edge"] .kc .edge-bar { position: absolute; left: 0; right: 0; top: 0; height: 3px; border-radius: 3px 3px 0 0; }
+[data-kc-style="bordered"] .kc { border-left: 3px solid var(--src-color, var(--rule)); }
 [data-kc-style="minimal"] .kc { border: 0; box-shadow: none; background: var(--bg-2); }
 [data-kc-style="minimal"] .kc:hover { background: var(--bg-sunk); box-shadow: none; }
 

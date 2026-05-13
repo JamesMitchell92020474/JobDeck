@@ -105,7 +105,7 @@ let descFetchInProgress = false;
 //  3. Kicks off a background Playwright fetch for New jobs that still have no description
 // Returns counts so the UI can show what happened.
 router.post('/filter-new', async (req, res) => {
-  const { threshold = 40 } = req.body;
+  const threshold = parseInt(getSetting('ai_filter_threshold') || '40', 10);
   const db = getDb();
   const newJobs = db.prepare('SELECT * FROM jobs WHERE status = ? AND is_soft_deleted = 0').all('New');
   if (newJobs.length === 0) return res.json({ archived: [], kept: 0, scored: 0, fetching: 0 });

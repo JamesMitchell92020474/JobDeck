@@ -119,7 +119,7 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
     setFiltering(true)
     setFilterResult(null)
     try {
-      const result = await api.post('/jobs/filter-new', { threshold: 40 })
+      const result = await api.post('/jobs/filter-new', {})
       const archivedIds = new Set(result.archived.map(j => j.id))
       setJobs(prev => prev.map(j => archivedIds.has(j.id) ? { ...j, status: 'Archived' } : j))
       setFilterResult({ archived: result.archived.length, kept: result.kept, fetching: result.fetching || 0 })
@@ -357,11 +357,13 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
           <div className="deadlines">
             {deadlines.map(d => {
               const parts = (d.deadline || '').split(' ')
+              const abbr = s => /^[A-Za-z]+$/.test(s) ? s.slice(0, 3) : s
+              const big = parts[1] || parts[0]
               return (
                 <div key={d.id} className="deadline-row" onClick={() => { setDetailJobId(d.id); setRoute('detail') }}>
                   <div className="deadline-date">
-                    <b>{parts[1] || parts[0]}</b>
-                    <span>{parts[0]}</span>
+                    <b>{abbr(big)}</b>
+                    <span>{abbr(parts[0])}</span>
                   </div>
                   <div className="deadline-mid">
                     <b>{d.title}</b>

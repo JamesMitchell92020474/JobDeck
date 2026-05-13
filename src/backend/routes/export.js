@@ -9,7 +9,7 @@ const router = express.Router();
 // POST /api/export/backup
 router.post('/backup', (req, res) => {
   try {
-    const backupDir = process.env.BACKUP_PATH || path.join('D:', 'JobDeck', 'backups');
+    const backupDir = getSetting('backup_path') || process.env.BACKUP_PATH || path.join('D:', 'JobDeck', 'backups');
     fs.mkdirSync(backupDir, { recursive: true });
 
     const date = new Date().toISOString().slice(0, 10);

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AppProvider } from './context/AppContext'
 import { useApp } from './context/AppContext'
 import Sidebar      from './components/layout/Sidebar'
@@ -9,6 +9,7 @@ import Chat         from './pages/Chat'
 import Settings     from './pages/Settings'
 import CardDetail   from './components/cards/CardDetail'
 import AddJobModal  from './components/cards/AddJobModal'
+import SetupWizard  from './pages/SetupWizard'
 
 function AppInner() {
   const [route,       setRoute]       = useState('dash')
@@ -59,6 +60,18 @@ function AppInner() {
 }
 
 export default function App() {
+  const [setup, setSetup] = useState(null) // null = checking
+
+  useEffect(() => {
+    fetch('/api/setup/status')
+      .then(r => r.json())
+      .then(d => setSetup(d))
+      .catch(() => setSetup({ needed: false }))
+  }, [])
+
+  if (setup === null) return null // brief check, no flash
+  if (setup.needed) return <SetupWizard defaults={setup.defaults} />
+
   return (
     <AppProvider>
       <AppInner />
