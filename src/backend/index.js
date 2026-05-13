@@ -31,6 +31,18 @@ app.use('/api/news',         require('./routes/news'));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, ts: Date.now() }));
 
+// Serve the built frontend (dist/ folder created by `npm run build:fe`).
+// In dev mode Vite handles this itself, so this block only activates when
+// the dist folder actually exists (i.e. after a production build).
+const distPath = path.join(__dirname, '../../dist');
+if (require('fs').existsSync(distPath)) {
+  app.use(express.static(distPath));
+  // Catch-all: for any URL that isn't an /api route, return index.html.
+  // This lets React Router handle client-side navigation (e.g. refreshing
+  // a page doesn't result in a 404 from Express).
+  app.get('*', (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
+}
+
 // Run startup (folders, cron)
 try { runStartup(); } catch (e) { console.error('[startup] Error:', e.message); }
 

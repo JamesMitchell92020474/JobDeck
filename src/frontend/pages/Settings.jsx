@@ -1,11 +1,26 @@
+// The Settings page. Lets the user configure everything from their name and CV
+// to scraper keywords and visual appearance.
+//
+// Settings are saved to the backend immediately when the user changes a value
+// (on blur for text inputs, on click for toggles), so there's no separate
+// "Save" button — changes take effect right away.
 import { useState, useEffect, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import Icon from '../components/ui/Icon'
 import api from '../hooks/useApi'
 
+// TagInput is a chip-style keyword editor.
+// Instead of typing a comma-separated string, each keyword becomes a pill
+// that can be individually removed. The underlying value is still stored as
+// a comma-separated string so nothing else needs to change.
+//
+// Props:
+//   value   — the current comma-separated keywords string from settings
+//   onSave  — called with the updated string whenever a keyword is added or removed
 function TagInput({ value, onSave, placeholder = 'Add keyword…' }) {
-  const [draft, setDraft] = useState('')
-  const inputRef = useRef(null)
+  const [draft, setDraft] = useState('')          // text the user is currently typing
+  const inputRef = useRef(null)                   // ref to the hidden input so we can focus it
+  // Convert the comma-separated string into an array of trimmed, non-empty tags.
   const tags = value ? value.split(',').map(t => t.trim()).filter(Boolean) : []
 
   const addTag = () => {
@@ -437,15 +452,6 @@ export default function Settings() {
             style={{ maxWidth: 320 }}
             defaultValue={settings.display_name || ''}
             onBlur={e => saveSetting('display_name', e.target.value)}
-          />
-        </div>
-        <div className="set-row">
-          <div className="lbl">Email</div>
-          <input
-            className="input"
-            style={{ maxWidth: 320 }}
-            defaultValue={settings.email || ''}
-            onBlur={e => saveSetting('email', e.target.value)}
           />
         </div>
         {[

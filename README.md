@@ -1,81 +1,143 @@
 # JobDeck
 
-AI-powered job search dashboard. Scrapes Seek and Trade Me Jobs, scores listings against your CV using Claude, tracks applications through a kanban pipeline, and helps you prepare for interviews.
+AI-powered job search dashboard for Windows. Scrapes Seek and Trade Me Jobs, scores listings against your CV using Claude AI, tracks applications through a kanban pipeline, and helps you prepare for interviews.
+
+---
 
 ## Features
 
-**Pipeline management**
+**Pipeline**
 - Kanban board — New → Interested → Applied → Interview → Offer → Rejected → Archived
 - AI fit scoring (0–100) against your CV with summary and skills gaps
-- One-click AI filter — scores all new listings, archives poor fits (< 40)
-- Playwright scraper for Seek and Trade Me Jobs (daily cron + manual trigger)
+- One-click AI filter — scores all new listings, archives poor fits automatically
+- Playwright scraper for Seek and Trade Me Jobs (daily schedule + manual trigger)
 - Full description fetch per job — extracts salary, job type, and posting date
 
 **AI chat**
-- Global chat with named session history (max 20 sessions, auto-named from first message)
-- Per-job chat with full job description + CV context
-- Voice mode — mic auto-restarts after each response; speak to interrupt TTS
-- Mock interview mode — 15 realistic questions, professional closing, written assessment with communication style analysis (tracks answer time, word count, filler words); save transcripts to compare across sessions
+- Global chat with named session history — discuss your whole job search with Claude
+- Per-job chat — Claude has the job description and your CV as context
+- Voice mode — hands-free conversation; mic restarts automatically after each response
+- Mock interview — 15 realistic questions, no mid-interview feedback, written assessment at the end; save and compare transcripts across sessions
 
 **Documents**
-- AI cover letter generation with custom template
+- AI cover letter generation with a custom style template
 - Export as PDF or Word
-- Multiple CV profiles with configurable labels (e.g. "Tech / IT" and "Hospitality / Retail", or any two categories that suit you)
+- Two CV profiles with configurable labels (e.g. "Tech / IT" and "Sales")
 
 **Other**
 - Dashboard with welcome message, pipeline stats, news feed, and weather
 - Activity logs, zip backups, dark mode, accent colour customisation
-- All personal details (name, email, CV profile labels, location) configured via Settings — no hardcoding
+- All personal details configured via Settings — no hardcoding in the code
 
-## Stack
+---
 
+## Requirements
+
+- **Windows** (the launcher is a `.bat` file)
+- **Node.js 24 or later** — download from [nodejs.org](https://nodejs.org) and choose version **24.x**
+  *(the app uses Node's built-in SQLite module which requires v24+)*
+- **An Anthropic API key** — get one free at [console.anthropic.com](https://console.anthropic.com)
+  *(you pay per use; typical job search usage costs a few cents a month)*
+
+---
+
+## Installation
+
+### Step 1 — Get the code
+
+**Option A — Git (recommended if you want easy updates):**
 ```
-src/
-  frontend/    React 18 + Vite (port 5173)
-  backend/     Express + node:sqlite (port 3001)
-  electron/    Desktop wrapper (optional)
+git clone https://github.com/JamesMitchell92020474/JobDeck.git
 ```
 
-- **Database**: Node.js 24 built-in `node:sqlite` — no native compilation
-- **AI**: Anthropic Claude (Sonnet for scoring/chat, Opus for deep analysis)
-- **Scraping**: Playwright (Chromium)
-- **Data**: configurable via `DATA_PATH` env var (default `D:\JobDeck\data`)
+**Option B — Download ZIP:**
+Go to the GitHub repo → click the green **Code** button → **Download ZIP** → extract it somewhere on your PC.
 
-## Setup
+---
+
+### Step 2 — First run
+
+Double-click **`JobDeck.bat`** in the folder.
+
+On first run it will automatically:
+1. Check your Node.js version
+2. Install all packages (`npm install`)
+3. Download the scraper browser (Playwright Chromium, ~150 MB — once only)
+4. Build the app
+5. Create a `.env` file and open it in Notepad
+
+---
+
+### Step 3 — Add your API key
+
+In Notepad, find this line:
+```
+ANTHROPIC_API_KEY=
+```
+Paste your key from [console.anthropic.com](https://console.anthropic.com) after the `=` sign.
+
+**If your PC has no D: drive**, also change `DATA_PATH`:
+```
+DATA_PATH=C:\JobDeck\data
+```
+(and update `LOG_PATH` and `BACKUP_PATH` to match)
+
+Save and close Notepad, then double-click **`JobDeck.bat`** again. Your browser will open to the app.
+
+---
+
+### Step 4 — Configure Settings
+
+Go to **Settings** (bottom of the sidebar) and fill in:
+
+| Setting | What it is |
+|---|---|
+| **Your name** | Used in AI prompts and the welcome message |
+| **Location** | Your city — used for scraping and weather |
+| **CV Profile 1 / 2** | Name your two CV profiles (e.g. "Tech / IT") then upload the PDFs |
+| **Profile keywords** | Keywords used to search for jobs in each category |
+| **Accent colour** | Pick a colour you like |
+
+---
+
+## Daily use
+
+- **Double-click `JobDeck.bat`** to start the app each day. Close the "JobDeck Server" window to stop it.
+- **Sync Sources** (dashboard) — scrapes Seek and Trade Me for new listings matching your keywords
+- **Filter with AI** — scores all new listings and archives anything below 40% fit
+- **Job cards** — click any job to see the full description, chat with Claude about it, or start a mock interview
+
+---
+
+## Getting updates
+
+When new changes are published to GitHub:
+
+1. Download the updated code (or `git pull` if you used Git)
+2. Double-click **`Update.bat`** — it installs new packages, rebuilds, and relaunches
+
+---
+
+## Troubleshooting
+
+**ESET antivirus** blocks Playwright's Chromium (used for scraping). Add to ESET exclusions:
+```
+C:\Users\<your username>\AppData\Local\ms-playwright\
+```
+In ESET: Advanced Setup → Protections → Real-time file system protection → Exclusions → use "Path" type.
+
+**No D: drive** — see Step 3 above to change the data path to C:.
+
+**Browser shows a blank page or error** — make sure the "JobDeck Server" window is open and didn't show any errors. Try refreshing after a few seconds.
+
+**AI features not working** — check that `ANTHROPIC_API_KEY` is set correctly in your `.env` file, with no spaces around the `=`.
+
+---
+
+## Development
+
+If you want to work on the code:
 
 ```powershell
-npm install
-npx playwright install chromium
-cp .env.example .env   # fill in ANTHROPIC_API_KEY and adjust paths
-npm run dev
+npm run dev    # hot reload — backend on :3001, frontend on :5173
 ```
-
-Open **http://localhost:5173**
-
-Then go to **Settings** to fill in your name, email, location, CV profiles, and scraper keywords.
-
-## Environment variables
-
-See `.env.example` for the full list. Required:
-
-```
-ANTHROPIC_API_KEY=      # get one at console.anthropic.com
-```
-
-Optional (shown with defaults):
-
-```
-DATA_PATH=D:\JobDeck\data
-LOG_PATH=D:\JobDeck\logs
-BACKUP_PATH=D:\JobDeck\backups
-PORT=3001
-NODE_ENV=development
-```
-
-## Known issues
-
-**ESET antivirus** blocks Playwright's Chromium and Electron's V8 snapshot. Add to ESET exclusions:
-- `C:\Users\<you>\AppData\Local\ms-playwright\`
-- `C:\Users\<you>\Projects\JobDeck\node_modules\electron\dist\`
-
-The app is fully functional in-browser without Electron.

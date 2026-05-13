@@ -46,17 +46,32 @@ function LineChart({ data, maxVal }) {
 
 const COLUMNS = ['New', 'Interested', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived']
 
+// Dashboard is the home screen of the app. It shows:
+//  - A personalised welcome message from Claude (weather + job stats)
+//  - Quick action buttons (scrape, AI filter, add job)
+//  - A stat strip with counts per pipeline stage
+//  - The latest New job listings sorted by fit score
+//  - A news feed (Hacker News + Geekzone NZ)
+//  - Charts and a deadlines section
+//
+// Props:
+//  setRoute       — changes which page is visible (e.g. to 'board' or 'detail')
+//  setDetailJobId — sets which job card to open when navigating to the detail view
+//  onNewJob       — opens the Add Job modal
 export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
+  // Pull shared data from the global store (AppContext).
   const { jobs, setJobs, loadJobs, getSourceColors, settings } = useApp()
-  const [welcome,        setWelcome]        = useState('')
-  const [statsData,      setStats]          = useState(null)
-  const [loadingWelcome, setLoadingWelcome] = useState(true)
-  const [news,           setNews]           = useState([])
-  const [syncing,        setSyncing]        = useState(false)
-  const [syncResult,     setSyncResult]     = useState(null)
-  const [filtering,      setFiltering]      = useState(false)
-  const [filterResult,   setFilterResult]   = useState(null)
-  const newsTimer = useRef(null)
+
+  // Local state for dashboard-specific data.
+  const [welcome,        setWelcome]        = useState('')      // AI welcome message text
+  const [statsData,      setStats]          = useState(null)    // pipeline counts from the API
+  const [loadingWelcome, setLoadingWelcome] = useState(true)   // show spinner while fetching welcome
+  const [news,           setNews]           = useState([])      // news feed articles
+  const [syncing,        setSyncing]        = useState(false)   // true while the scraper is running
+  const [syncResult,     setSyncResult]     = useState(null)    // message shown after scraping
+  const [filtering,      setFiltering]      = useState(false)   // true while AI filter is running
+  const [filterResult,   setFilterResult]   = useState(null)    // message shown after AI filter
+  const newsTimer = useRef(null)  // holds the setInterval ID so we can clear it on unmount
 
   function isExpiringSoon(expiryDate) {
     if (!expiryDate) return false

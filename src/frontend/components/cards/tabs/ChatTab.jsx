@@ -1,9 +1,20 @@
+// The chat tab inside a job card detail view.
+// Supports two modes:
+//   "chat"      — a regular Q&A with Claude about this specific role (uses the job
+//                 description and the user's CV as context).
+//   "interview" — a mock interview where Claude plays the interviewer. Tracks answer
+//                 duration and filler words for the final assessment. Transcripts can
+//                 be saved and compared across sessions.
+//
+// Voice mode: clicking the mic once enters a hands-free loop — the mic restarts
+// automatically after each response so the user can speak continuously.
 import { useState, useEffect, useRef } from 'react'
 import Icon from '../../ui/Icon'
 import api from '../../../hooks/useApi'
 import { useApp } from '../../../context/AppContext'
 import { useSpeech } from '../../../hooks/useSpeech'
 
+// Filler words to detect in interview answers — counted and reported in the assessment.
 const FILLERS = {
   'um':        /\bum+\b/gi,
   'uh':        /\buh+\b/gi,

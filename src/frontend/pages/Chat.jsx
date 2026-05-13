@@ -1,9 +1,20 @@
+// The global chat page — a full conversation with Claude about the user's
+// entire job search pipeline. Supports named sessions (like browser tabs),
+// voice mode (mic auto-restarts after each response), and text-to-speech.
+//
+// Key design decisions:
+//  - Job context is fetched once on mount and passed with every message
+//    so the database isn't queried on each send.
+//  - Sessions are stored in global_chat_sessions and messages in global_chat.
+//  - Voice mode is driven by useSpeech — clicking the mic once enters a loop
+//    where the mic restarts automatically after Claude replies.
 import { useState, useEffect, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import Icon from '../components/ui/Icon'
 import api from '../hooks/useApi'
 import { useSpeech } from '../hooks/useSpeech'
 
+// Formats an ISO date string into a human-readable NZ date like "5 Jan 2025".
 function formatDate(iso) {
   const d = new Date(iso)
   return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })

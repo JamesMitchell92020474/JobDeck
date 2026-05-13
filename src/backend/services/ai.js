@@ -1,38 +1,62 @@
+// This file contains all the functions that talk to Claude (Anthropic's AI).
+// Each function builds a prompt, sends it to the API, and returns the response.
+// The API key is read from the environment variable or from the settings table.
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db/database');
 
+// Creates and returns an Anthropic API client using the stored API key.
+// Called at the start of every AI function so the key is always fresh.
 function getClient() {
   const key = process.env.ANTHROPIC_API_KEY || getSetting('api_key') || '';
   if (!key) throw new Error('ANTHROPIC_API_KEY not configured');
   return new Anthropic({ apiKey: key });
 }
 
+// Returns the user's display name from settings, falling back to "the candidate"
+// if no name has been configured yet.
 function userName() {
   return getSetting('display_name') || 'the candidate';
 }
 
+// The two Claude model IDs used across the app.
+// Sonnet is faster and cheaper; Opus is more powerful and used for deep analysis.
 const SONNET = 'claude-sonnet-4-20250514';
 const OPUS   = 'claude-opus-4-20250514';
 
+// A simple helper that sends a single message to Claude and returns the text reply.
+// Used by functions that don't need a back-and-forth conversation history.
 async function complete(prompt, { model = SONNET, system } = {}) {
   const client = getClient();
   const messages = [{ role: 'user', content: prompt }];
   const res = await client.messages.create({
     model,
     max_tokens: 1024,
-    system,
+    system,    // optional system prompt that sets Claude's behaviour
     messages,
   });
   return res.content[0].text;
 }
 
+// Generates the personalised welcome message shown at the top of the Dashboard.
+// Receives current job pipeline stats and optional weather data, then asks
+// Claude to write a 1–2 sentence encouraging update.
+//
+// "displayName" — the user's name from Settings.
+// "weather"     — { temp, desc, city } from Open-Meteo, or null if unavailable.
 async function generateWelcome(stats, displayName, weather = null) {
   const { new: newCount, interested, applied, interview, offer, upcomingDeadlines } = stats;
-  const hour = new Date().getHours();
+  const hour    = new Date().getHours();
   const greeting = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
-  const month = new Date().getMonth() + 1; // 1-12
-  const season = month >= 3 && month <= 5 ? 'autumn' : month >= 6 && month <= 8 ? 'winter' : month >= 9 && month <= 11 ? 'spring' : 'summer';
-  const weatherLine = weather ? `Current weather in ${weather.city || 'your area'}: ${weather.temp}°C, ${weather.desc}.` : '';
+  const month    = new Date().getMonth() + 1; // getMonth() returns 0–11, so add 1
+  // Work out the current season for the Southern Hemisphere (opposite to the North).
+  const season   = month >= 3 && month <= 5 ? 'autumn'
+                 : month >= 6 && month <= 8 ? 'winter'
+                 : month >= 9 && month <= 11 ? 'spring'
+                 : 'summer';
+  // Only include weather in the prompt if we successfully fetched it.
+  const weatherLine = weather
+    ? `Current weather in ${weather.city || 'your area'}: ${weather.temp}°C, ${weather.desc}.`
+    : '';
 
   const prompt = `Write a warm, concise 1-2 sentence job search status update addressed directly to ${displayName} (use "you/your", not third person).
 Current stats: ${newCount} new jobs awaiting review, ${interested} shortlisted, ${applied} applied, ${interview} in interview, ${offer} offers. Upcoming deadlines: ${upcomingDeadlines} in next 7 days.
@@ -42,6 +66,11 @@ Do NOT open with a greeting or the user's name — go straight to the job summar
   return complete(prompt);
 }
 
+// Scores a job description against the user's CV and extracts key information.
+// Returns a JSON object with: fit_score, summary, skills_gaps, deadline, description_summary.
+//
+// All five fields are extracted in a single API call to save cost and time.
+// The result is saved to the job in the database by the calling route.
 async function scoreFit(jobDescription, cvText) {
   const prompt = `You are an expert career advisor. Analyse this job description against the candidate's CV.
 
@@ -62,11 +91,14 @@ Return a JSON object with exactly these fields:
 Return only valid JSON, no markdown.`;
 
   const raw = await complete(prompt);
+  // Parse the JSON string Claude returned into a proper JavaScript object.
   return JSON.parse(raw);
 }
 
+// Generates a cover letter for a specific job using the user's CV and template.
+// The template is optional — a sensible default is used if none is saved.
 async function generateCoverLetter(job, cvText, template) {
-  const name = getSetting('display_name') || '';
+  const name    = getSetting('display_name') || '';
   const signOff = name ? `Signed ${name.split(' ')[0]}.` : 'Sign off with your name.';
   const prompt = `Write a professional cover letter for the following role. Use the candidate's CV and the template guidance.
 
@@ -84,9 +116,13 @@ Write the cover letter as plain text. No subject line. Start with the salutation
   return complete(prompt);
 }
 
+// Handles messages in the per-job regular chat (not interview mode).
+// "messages" is the full conversation history so Claude remembers earlier turns.
+// The job description and CV are included in the system prompt so Claude has
+// context about what role is being discussed.
 async function jobChat(messages, job, cvText) {
   const client = getClient();
-  const name = userName();
+  const name   = userName();
   const system = `You are helping ${name} prepare for a job application.
 Role: ${job.title} at ${job.company}.
 Job description: ${(job.description || '').slice(0, 2000)}
@@ -97,14 +133,26 @@ Be concise, specific, and practically useful.`;
     model: SONNET,
     max_tokens: 1024,
     system,
+    // Map the stored messages to the format the API expects ({ role, content }).
     messages: messages.map(m => ({ role: m.role, content: m.content })),
   });
   return { text: res.content[0].text, model: SONNET };
 }
 
+// Runs the mock interview conversation.
+// Claude acts as a professional interviewer for the specific role.
+// The structure is defined in the system prompt:
+//   - Opens with "tell me about yourself"
+//   - 12–15 questions (behavioural, technical, situational)
+//   - Up to 1 follow-up per answer
+//   - No mid-interview feedback
+//   - Closes professionally, then delivers a full assessment
+//
+// Each user message may include a metadata header like "[Answer: 45s | 120 words]"
+// which Claude uses in the final Communication Style section of the assessment.
 async function interviewChat(messages, job, cvText) {
   const client = getClient();
-  const name = userName();
+  const name   = userName();
   const system = `You are conducting a realistic mock job interview for ${name}, who is applying for ${job.title} at ${job.company}.
 
 STRUCTURE:
@@ -144,10 +192,21 @@ Candidate CV: ${(cvText || '').slice(0, 2000)}`;
   return { text: res.content[0].text, model: SONNET };
 }
 
+// Handles the global chat — a conversation about the user's entire job search,
+// not tied to any specific listing.
+//
+// "context" is the full job pipeline summary (built from the database and passed
+// in from the frontend, which caches it to avoid re-querying on every message).
+//
+// "useOpus" switches to the more powerful model when the user enables Deep Analysis.
+//
+// Prompt caching: the system prompt is sent as a special block that Anthropic
+// caches for 5 minutes. After the first message, subsequent turns in the same
+// session pay roughly 10% of the normal input token cost for the cached portion.
 async function globalChat(messages, context, useOpus = false) {
   const client = getClient();
-  const model = useOpus ? OPUS : SONNET;
-  const name = userName();
+  const model  = useOpus ? OPUS : SONNET;
+  const name   = userName();
 
   const res = await client.messages.create({
     model,
@@ -155,7 +214,10 @@ async function globalChat(messages, context, useOpus = false) {
     system: [
       {
         type: 'text',
+        // The system prompt includes the full job pipeline so Claude can discuss
+        // specific listings, compare opportunities, and give tailored advice.
         text: `You are a personal job search assistant for ${name}.\n${context}\nBe concise and practically useful.`,
+        // This tells Anthropic to cache this block — saves cost on long conversations.
         cache_control: { type: 'ephemeral' },
       },
     ],

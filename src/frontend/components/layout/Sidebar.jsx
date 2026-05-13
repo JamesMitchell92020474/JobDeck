@@ -5,7 +5,6 @@ export default function Sidebar({ route, setRoute }) {
   const { settings, columnCounts } = useApp()
   const total = Object.values(columnCounts).reduce((a, b) => a + b, 0)
   const name  = settings.display_name || ''
-  const email = settings.email || ''
   const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2)
 
   const nav = [
@@ -46,7 +45,6 @@ export default function Sidebar({ route, setRoute }) {
           <div className="avatar">{initials}</div>
           <div>
             <div className="sidebar-foot-name">{name}</div>
-            <div className="sidebar-foot-mail">{email}</div>
           </div>
         </div>
       </div>

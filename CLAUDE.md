@@ -38,6 +38,20 @@ npm run dev:fe       # Vite on :5173
 The app works fully in browser at http://localhost:5173. Electron has a known issue
 on this machine (ESET antivirus blocks V8 context snapshot loading — see below).
 
+## Running in production (end-user mode)
+
+```powershell
+npm run build:fe     # compile React app into dist/
+npm start            # backend serves dist/ as static files on :3001
+```
+
+`index.js` detects the `dist/` folder and serves it via `express.static`. A catch-all
+route returns `index.html` for any non-API path (required for React client-side routing).
+
+End users double-click **`JobDeck.bat`** which handles all of the above automatically,
+including first-time `npm install`, Playwright Chromium download, and `.env` creation.
+**`Update.bat`** is used after pulling new changes from GitHub (rebuilds the frontend).
+
 ## Vite config note
 
 `vite.config.js` sets `root: 'src/frontend'` — Vite serves from that directory.
@@ -346,7 +360,7 @@ Nulls always sort to the bottom regardless of direction.
 Electron's V8 context snapshot from loading.
 
 **Fix:** Add Electron dist folder to ESET exclusions:
-`C:\Users\James\Projects\JobDeck\node_modules\electron\dist\`
+`C:\Users\<you>\Projects\JobDeck\node_modules\electron\dist\`
 
 In ESET: Advanced Setup → Protections → Real-time file system protection → Exclusions
 (use "Paths" exclusion type, NOT "Extensions").
@@ -375,7 +389,7 @@ ACCENT_COLOR=#423A8E
 
 ## User preferences
 
-- James Mitchell · hello@jamesmitchell.co.nz · Christchurch, NZ
+- James Mitchell · Christchurch, NZ
 - Graphic design + frontend dev background — UI quality matters
 - NZ context: Xero, Sharesies, Hnry, Auror, Tracksuit, Cin7 are realistic companies
 - Sources: Seek, Trade Me Jobs (scraped) · LinkedIn (manual add only, not scraped)
