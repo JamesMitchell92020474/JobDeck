@@ -4,8 +4,8 @@ import Icon from '../ui/Icon'
 export default function Sidebar({ route, setRoute }) {
   const { settings, columnCounts } = useApp()
   const total = Object.values(columnCounts).reduce((a, b) => a + b, 0)
-  const name  = settings.display_name || 'James Mitchell'
-  const email = settings.email || 'james@mitchell.nz'
+  const name  = settings.display_name || ''
+  const email = settings.email || ''
   const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2)
 
   const nav = [

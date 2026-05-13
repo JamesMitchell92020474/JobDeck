@@ -10,7 +10,7 @@ function formatDate(iso) {
 }
 
 export default function Chat() {
-  const { jobs } = useApp()
+  const { jobs, settings } = useApp()
   const [sessions,         setSessions]         = useState([])
   const [activeSessionId,  setActiveSessionId]  = useState(null)
   const [messages,         setMessages]         = useState([])
@@ -311,7 +311,7 @@ export default function Chat() {
               </div>
               <div className="chat-body">
                 <b style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {m.role === 'user' ? 'James' : 'Claude'}
+                  {m.role === 'user' ? (settings.display_name || 'You') : 'Claude'}
                   {m.is_deep_analysis ? <span className="deep-analysis-badge"><Icon name="cpu" size={10} /> Deep Analysis</span> : null}
                 </b>
                 <p>{m.content}</p>

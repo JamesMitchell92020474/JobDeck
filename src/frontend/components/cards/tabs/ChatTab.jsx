@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import Icon from '../../ui/Icon'
 import api from '../../../hooks/useApi'
+import { useApp } from '../../../context/AppContext'
 import { useSpeech } from '../../../hooks/useSpeech'
 
 export default function ChatTab({ job, onCountChange }) {
+  const { settings } = useApp()
   const [messages,      setMessages]      = useState([])
   const [cvText,        setCvText]        = useState(null)
   const [draft,         setDraft]         = useState('')
@@ -179,7 +181,7 @@ export default function ChatTab({ job, onCountChange }) {
               {m.role === 'user' ? 'J' : 'C'}
             </div>
             <div className="chat-body">
-              <b>{m.role === 'user' ? 'James' : (interviewMode ? 'Interviewer' : 'Claude')}</b>
+              <b>{m.role === 'user' ? (settings.display_name || 'You') : (interviewMode ? 'Interviewer' : 'Claude')}</b>
               <p>{m.content}</p>
             </div>
           </div>

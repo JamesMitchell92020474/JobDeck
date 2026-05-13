@@ -7,6 +7,10 @@ function getClient() {
   return new Anthropic({ apiKey: key });
 }
 
+function userName() {
+  return getSetting('display_name') || 'the candidate';
+}
+
 const SONNET = 'claude-sonnet-4-20250514';
 const OPUS   = 'claude-opus-4-20250514';
 
@@ -22,15 +26,15 @@ async function complete(prompt, { model = SONNET, system } = {}) {
   return res.content[0].text;
 }
 
-async function generateWelcome(stats, userName, weather = null) {
+async function generateWelcome(stats, displayName, weather = null) {
   const { new: newCount, interested, applied, interview, offer, upcomingDeadlines } = stats;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
   const month = new Date().getMonth() + 1; // 1-12
   const season = month >= 3 && month <= 5 ? 'autumn' : month >= 6 && month <= 8 ? 'winter' : month >= 9 && month <= 11 ? 'spring' : 'summer';
-  const weatherLine = weather ? `Current weather in Christchurch: ${weather.temp}°C, ${weather.desc}.` : '';
+  const weatherLine = weather ? `Current weather in ${weather.city || 'your area'}: ${weather.temp}°C, ${weather.desc}.` : '';
 
-  const prompt = `Write a warm, concise 1-2 sentence job search status update addressed directly to ${userName} (use "you/your", not third person).
+  const prompt = `Write a warm, concise 1-2 sentence job search status update addressed directly to ${displayName} (use "you/your", not third person).
 Current stats: ${newCount} new jobs awaiting review, ${interested} shortlisted, ${applied} applied, ${interview} in interview, ${offer} offers. Upcoming deadlines: ${upcomingDeadlines} in next 7 days.
 Time of day: ${greeting}. Season: ${season} (Southern Hemisphere — NZ). ${weatherLine} Be specific and encouraging but not sycophantic. You may weave in the weather or season naturally if it fits, but don't force it.
 Do NOT open with a greeting or the user's name — go straight to the job summary. Output plain text only, no markdown.`;
@@ -62,6 +66,8 @@ Return only valid JSON, no markdown.`;
 }
 
 async function generateCoverLetter(job, cvText, template) {
+  const name = getSetting('display_name') || '';
+  const signOff = name ? `Signed ${name.split(' ')[0]}.` : 'Sign off with your name.';
   const prompt = `Write a professional cover letter for the following role. Use the candidate's CV and the template guidance.
 
 ROLE: ${job.title} at ${job.company} in ${job.location || 'NZ'}
@@ -71,7 +77,7 @@ CANDIDATE CV SUMMARY:
 ${(cvText || '').slice(0, 3000)}
 
 TEMPLATE / STYLE GUIDANCE:
-${template || 'Professional, concise, NZ context. 3 paragraphs. Signed James.'}
+${template || `Professional, concise. 3 paragraphs. ${signOff}`}
 
 Write the cover letter as plain text. No subject line. Start with the salutation.`;
 
@@ -80,7 +86,8 @@ Write the cover letter as plain text. No subject line. Start with the salutation
 
 async function jobChat(messages, job, cvText) {
   const client = getClient();
-  const system = `You are helping James Mitchell prepare for a job application.
+  const name = userName();
+  const system = `You are helping ${name} prepare for a job application.
 Role: ${job.title} at ${job.company}.
 Job description: ${(job.description || '').slice(0, 2000)}
 CV summary: ${(cvText || '').slice(0, 2000)}
@@ -97,17 +104,18 @@ Be concise, specific, and practically useful.`;
 
 async function interviewChat(messages, job, cvText) {
   const client = getClient();
-  const system = `You are conducting a mock job interview for James Mitchell, who is applying for the role of ${job.title} at ${job.company}.
+  const name = userName();
+  const system = `You are conducting a mock job interview for ${name}, who is applying for the role of ${job.title} at ${job.company}.
 
-Your goal is to help James prepare for the real interview. Rules:
+Your goal is to help ${name} prepare for the real interview. Rules:
 - Ask ONE question at a time — never ask multiple questions in one turn
-- After James answers, give 1-2 sentences of specific, constructive feedback, then ask the next question
+- After the candidate answers, give 1-2 sentences of specific, constructive feedback, then ask the next question
 - Mix question types: behavioural (STAR method), role-specific/technical, and situational
 - Draw questions from the job description and the candidate's background where relevant
 - After 5-7 questions, wrap up with a brief overall assessment and 2-3 concrete improvement tips
 - Keep a professional but encouraging tone — you're a supportive interviewer, not adversarial
 
-If this is the opening message (James said "Start mock interview"), introduce yourself briefly, then ask your first question.
+If this is the opening message, introduce yourself briefly, then ask your first question.
 
 Job description: ${(job.description || '').slice(0, 2000)}
 Candidate CV: ${(cvText || '').slice(0, 2000)}`;
@@ -124,6 +132,7 @@ Candidate CV: ${(cvText || '').slice(0, 2000)}`;
 async function globalChat(messages, context, useOpus = false) {
   const client = getClient();
   const model = useOpus ? OPUS : SONNET;
+  const name = userName();
 
   const res = await client.messages.create({
     model,
@@ -131,7 +140,7 @@ async function globalChat(messages, context, useOpus = false) {
     system: [
       {
         type: 'text',
-        text: `You are a personal job search assistant for James Mitchell.\n${context}\nBe concise and practically useful.`,
+        text: `You are a personal job search assistant for ${name}.\n${context}\nBe concise and practically useful.`,
         cache_control: { type: 'ephemeral' },
       },
     ],

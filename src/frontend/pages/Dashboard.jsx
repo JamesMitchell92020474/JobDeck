@@ -47,7 +47,7 @@ function LineChart({ data, maxVal }) {
 const COLUMNS = ['New', 'Interested', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived']
 
 export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
-  const { jobs, setJobs, loadJobs, getSourceColors } = useApp()
+  const { jobs, setJobs, loadJobs, getSourceColors, settings } = useApp()
   const [welcome,        setWelcome]        = useState('')
   const [statsData,      setStats]          = useState(null)
   const [loadingWelcome, setLoadingWelcome] = useState(true)
@@ -155,9 +155,9 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
       <div className="hello">
         <div className="hello-meta">
           <span className="eyebrow">{dayStr}</span>
-          <span className="eyebrow">Christchurch · NZ</span>
+          <span className="eyebrow">{settings.scraper_location || 'NZ'}</span>
         </div>
-        <h1 className="hello-h">{greet}, <em>James</em>.</h1>
+        <h1 className="hello-h">{greet}{settings.display_name ? <>, <em>{settings.display_name.split(' ')[0]}</em></> : ''}.</h1>
         <p className="hello-sub">
           {loadingWelcome
             ? <span className="spinner" style={{ display: 'inline-block', verticalAlign: 'middle' }} />

@@ -94,8 +94,8 @@ function getDb() {
     display_font:    'Cambria',
     body_font:       'Inter',
     card_style:      'edge',
-    display_name:    'James Mitchell',
-    email:           'james@mitchell.nz',
+    display_name:    '',
+    email:           '',
     density:         'balanced',
     source_colors:   JSON.stringify({
       Seek:           '#FFC107',

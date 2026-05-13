@@ -5,7 +5,7 @@ const { globalChat } = require('../services/ai');
 const router = express.Router();
 
 function buildContext(db) {
-  const userName = getSetting('display_name') || 'James';
+  const userName = getSetting('display_name') || '';
   const cvText   = getSetting('cv_text_tech') || getSetting('cv_text_hospitality') || getSetting('cv_text') || '';
 
   const jobs = db.prepare(`

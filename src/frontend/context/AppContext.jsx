@@ -10,8 +10,8 @@ const DEFAULT_SETTINGS = {
   body_font: 'Inter',
   card_style: 'edge',
   density: 'balanced',
-  display_name: 'James Mitchell',
-  email: 'james@mitchell.nz',
+  display_name: '',
+  email: '',
   source_colors: JSON.stringify({
     Seek: '#3D5A80', 'Trade Me Jobs': '#2E7D5B',
   }),
