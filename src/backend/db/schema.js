@@ -74,6 +74,13 @@ CREATE TABLE IF NOT EXISTS global_chat (
   created_at       TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS job_interview_runs (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id      INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  transcript  TEXT NOT NULL,
+  created_at  TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS activity_logs (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   log_type     TEXT NOT NULL,

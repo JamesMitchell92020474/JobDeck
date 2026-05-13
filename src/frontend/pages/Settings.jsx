@@ -3,6 +3,63 @@ import { useApp } from '../context/AppContext'
 import Icon from '../components/ui/Icon'
 import api from '../hooks/useApi'
 
+function TagInput({ value, onSave, placeholder = 'Add keyword…' }) {
+  const [draft, setDraft] = useState('')
+  const inputRef = useRef(null)
+  const tags = value ? value.split(',').map(t => t.trim()).filter(Boolean) : []
+
+  const addTag = () => {
+    const tag = draft.trim().replace(/,/g, '')
+    if (!tag || tags.includes(tag)) { setDraft(''); return }
+    onSave([...tags, tag].join(', '))
+    setDraft('')
+  }
+
+  const removeTag = (i) => onSave(tags.filter((_, idx) => idx !== i).join(', '))
+
+  return (
+    <div
+      onClick={() => inputRef.current?.focus()}
+      style={{
+        display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center',
+        border: '1px solid var(--border)', borderRadius: 8, padding: '6px 8px',
+        background: 'var(--bg)', cursor: 'text', minHeight: 38, maxWidth: 520,
+      }}
+    >
+      {tags.map((tag, i) => (
+        <span key={i} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+          background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+          color: 'var(--accent)',
+          border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+          borderRadius: 100, padding: '2px 6px 2px 9px', fontSize: 12, fontWeight: 500,
+        }}>
+          {tag}
+          <button
+            onClick={e => { e.stopPropagation(); removeTag(i) }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, fontSize: 15, lineHeight: 1, opacity: 0.6, marginTop: -1 }}
+          >×</button>
+        </span>
+      ))}
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag() }
+          else if (e.key === 'Backspace' && !draft && tags.length) removeTag(tags.length - 1)
+        }}
+        onBlur={addTag}
+        placeholder={tags.length === 0 ? placeholder : ''}
+        style={{
+          border: 'none', outline: 'none', background: 'transparent',
+          fontSize: 13, minWidth: 140, flex: 1, color: 'var(--ink-1)',
+        }}
+      />
+    </div>
+  )
+}
+
 const SOURCES = ['Seek', 'Trade Me Jobs']
 
 const DEFAULT_SRC_COLORS = {
@@ -251,21 +308,17 @@ export default function Settings() {
           </div>
         </div>
         <div className="set-row">
-          <div className="lbl">{settings.cv_label_1 || 'CV Profile 1'} keywords<small>Search terms for this job category</small></div>
-          <input
-            className="input"
-            style={{ maxWidth: 480 }}
-            defaultValue={settings.scraper_keywords_tech || 'front end developer, web developer, IT support, systems administrator, Microsoft 365, React, JavaScript, CRM'}
-            onBlur={e => saveSetting('scraper_keywords_tech', e.target.value)}
+          <div className="lbl">{settings.cv_label_1 || 'CV Profile 1'} keywords<small>Type a keyword and press Enter or comma to add · Backspace removes the last</small></div>
+          <TagInput
+            value={settings.scraper_keywords_tech || 'front end developer, web developer, IT support, systems administrator, Microsoft 365, React, JavaScript, CRM'}
+            onSave={val => saveSetting('scraper_keywords_tech', val)}
           />
         </div>
         <div className="set-row">
-          <div className="lbl">{settings.cv_label_2 || 'CV Profile 2'} keywords<small>Search terms for this job category</small></div>
-          <input
-            className="input"
-            style={{ maxWidth: 480 }}
-            defaultValue={settings.scraper_keywords_hospitality || 'customer service, barista, cafe, retail assistant, front of house, hospitality'}
-            onBlur={e => saveSetting('scraper_keywords_hospitality', e.target.value)}
+          <div className="lbl">{settings.cv_label_2 || 'CV Profile 2'} keywords<small>Type a keyword and press Enter or comma to add · Backspace removes the last</small></div>
+          <TagInput
+            value={settings.scraper_keywords_hospitality || 'customer service, barista, cafe, retail assistant, front of house, hospitality'}
+            onSave={val => saveSetting('scraper_keywords_hospitality', val)}
           />
         </div>
         <div className="set-row">

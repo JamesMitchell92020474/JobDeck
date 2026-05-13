@@ -58,8 +58,10 @@ Migrations run in `database.js` via `try { db.exec('ALTER TABLE...') } catch {}`
 Key schema additions (beyond initial schema):
 - `jobs.logo_url`, `jobs.job_category`, `jobs.description_summary` — added via migrations
 - `job_chat.mode TEXT DEFAULT 'chat'` — separates regular chat from interview history
+- `job_chat.answer_meta TEXT` — JSON metadata per interview answer (duration, wordCount, fillerWords)
 - `global_chat.session_id` — links messages to a named session
 - `global_chat_sessions (id, name, created_at)` — named chat sessions, max 20 kept
+- `job_interview_runs (id, job_id, transcript, created_at)` — saved interview transcripts
 
 **Transaction pattern** — `node:sqlite` has no `db.transaction()` wrapper. Use explicit:
 ```js
@@ -90,6 +92,8 @@ catch (e) { db.exec('ROLLBACK'); }
 | `scraper_keywords_hospitality` | Comma-separated keywords for hospitality searches |
 | `scraper_max_age_days` | Only pull jobs posted within this many days (default: 30) |
 | `last_sync_{source}` | ISO timestamp of last successful sync per source |
+| `cv_label_1` | Display name for the first CV profile (default: "CV Profile 1") |
+| `cv_label_2` | Display name for the second CV profile (default: "CV Profile 2") |
 
 ## Design system
 
@@ -144,11 +148,9 @@ API key loaded from `ANTHROPIC_API_KEY` env var, falls back to `api_key` DB sett
 
 `scoreFit()` returns: `{ fit_score, summary, skills_gaps, deadline, description_summary }` — all extracted in one call. `description_summary` is a 1-2 sentence plain-text overview of the role, stored on the job and used in global chat context to reduce token usage. Saved to `jobs.description_summary` by all four score-save sites (ai-score route, fetch-description background, filter-new route, scraper).
 
-`interviewChat(messages, job, cvText)` — mock interview mode for per-card chat. Claude plays the interviewer: asks one question at a time, gives feedback per answer, wraps up after 5-7 questions. Uses separate message history (`mode = 'interview'` on `job_chat` rows).
+`interviewChat(messages, job, cvText)` — mock interview mode for per-card chat. Claude plays a professional interviewer: opens with "tell me about yourself", asks 12–15 questions (behavioural/STAR, technical, situational), may ask 1 follow-up per answer, gives no mid-interview feedback, closes professionally, then delivers a written assessment covering strengths, areas to improve, and a communication style section (uses per-answer metadata: duration, word count, filler words). Uses separate message history (`mode = 'interview'` on `job_chat` rows). Transcripts saved to `job_interview_runs` table.
 
-`generateWelcome(stats, userName, weather)` — weather is fetched from Open-Meteo (Christchurch,
-no API key required) and passed in. Falls back gracefully if fetch fails. Includes correct
-NZ Southern Hemisphere season. Strips any leading greeting from the AI response server-side.
+`generateWelcome(stats, displayName, weather)` — weather is fetched from Open-Meteo using coordinates derived from the `scraper_location` setting (lookup table for main NZ cities). No API key required. Falls back gracefully if fetch fails. Includes correct NZ Southern Hemisphere season. Strips any leading greeting from the AI response server-side.
 
 ## Frontend routing
 
@@ -179,6 +181,10 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | POST | /api/jobs/:id/export-word | Export as .docx (saves to uploads/cover-letters/) |
 | GET | /api/jobs/:id/files/:fileId/serve | Serve file inline or as download (`?download=1`) |
 | POST/DELETE | /api/jobs/:id/files | File attachments |
+| GET | /api/jobs/:id/interview-runs | List saved interview transcripts |
+| GET | /api/jobs/:id/interview-runs/:runId | Full transcript for one run |
+| POST | /api/jobs/:id/interview-runs/save | Save current interview transcript + clear live messages |
+| DELETE | /api/jobs/:id/interview-runs/:runId | Delete a saved run |
 | GET | /api/chat/sessions | List sessions newest-first, max 20, with message count |
 | POST | /api/chat/sessions | Create new session (name auto-set from first message) |
 | PATCH | /api/chat/sessions/:id | Rename session |
@@ -214,7 +220,7 @@ Chat history is scoped by `mode` column on `job_chat`:
 
 The frontend fetches `GET /api/jobs/:id/chat-context` once on card open and passes `cvText` with every POST, avoiding repeated settings lookups.
 
-**Mock interview mode** — toggled via "Mock Interview" button in the chat tab header. Claude acts as the interviewer for that specific role, asks one question at a time with feedback, wraps up after 5-7 questions. Auto-begins on first open of an empty interview session.
+**Mock interview mode** — toggled via accent-coloured "Mock Interview" button in the chat tab header. 15 questions, no mid-interview feedback, professional closing, full written assessment at the end. Per-answer metadata tracked on the frontend (duration, word count, filler words via regex) and stored in `job_chat.answer_meta` (JSON). Backend prepends a formatted metadata header to each user message when building Claude's context. Auto-begins on first ever use; returns to an empty state after that so the user chooses when to start again. Completed interviews saved to `job_interview_runs` (transcript as plain text) via "Save Interview" button; past runs viewable/deletable in a collapsible panel.
 
 ### Voice mode (`src/frontend/hooks/useSpeech.js`)
 Shared hook used by both `Chat.jsx` and `ChatTab.jsx`.
@@ -250,14 +256,14 @@ A `descFetchInProgress` module-level flag prevents concurrent background fetches
 
 Jobs are auto-tagged on creation (POST /api/jobs and scraper inserts) via `src/backend/services/autoTag.js`.
 
-| Value | Label | CV used for AI |
-|-------|-------|----------------|
-| `tech` | Tech | `cv_text_tech` → `cv_text` |
-| `hospitality` | Hospitality | `cv_text_hospitality` → `cv_text` |
+| Value | Label (configurable) | CV used for AI |
+|-------|----------------------|----------------|
+| `tech` | `cv_label_1` setting (default: "CV Profile 1") | `cv_text_tech` → `cv_text` |
+| `hospitality` | `cv_label_2` setting (default: "CV Profile 2") | `cv_text_hospitality` → `cv_text` |
 | `null` | General | `cv_text_tech` → `cv_text_hospitality` → `cv_text` |
 
+Category labels are user-configurable via Settings — the internal DB values (`tech`/`hospitality`) are unchanged. Labels flow through to job card badges, board filter chips, category dropdown, and Add Job modal.
 Category shown as label + dropdown selector in card detail aside.
-Board has category filter chips: All / Tech / Hospitality / General.
 
 ## Dashboard
 

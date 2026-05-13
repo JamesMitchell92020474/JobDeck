@@ -70,6 +70,8 @@ function getDb() {
 
   // Add mode column to job_chat for separating interview vs regular chat history
   try { db.exec("ALTER TABLE job_chat ADD COLUMN mode TEXT NOT NULL DEFAULT 'chat'") } catch {}
+  // Answer metadata for interview mode (duration, word count, filler words)
+  try { db.exec('ALTER TABLE job_chat ADD COLUMN answer_meta TEXT') } catch {}
   // Short AI-generated description summary for use in global chat context
   try { db.exec('ALTER TABLE jobs ADD COLUMN description_summary TEXT') } catch {}
 

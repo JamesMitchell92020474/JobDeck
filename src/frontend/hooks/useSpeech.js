@@ -48,7 +48,10 @@ export function useSpeech() {
       // If it's still false, recognition ended naturally (timeout / no speech) — restart if needed.
       if (!cancelRef.current) onNaturalEnd?.()
     }
-    rec.onerror = () => { setListening(false) }
+    rec.onerror = () => {
+      cancelRef.current = true  // prevent onNaturalEnd restart on mic errors
+      setListening(false)
+    }
     recRef.current = rec
     rec.start()
     setListening(true)

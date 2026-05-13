@@ -219,16 +219,44 @@ router.get('/:id/chat', (req, res) => {
 
 // POST /api/jobs/:id/chat
 router.post('/:id/chat', async (req, res) => {
-  const { content, mode = 'chat', cvText: clientCvText } = req.body;
+  const { content, mode = 'chat', cvText: clientCvText, answerMeta } = req.body;
   const db = getDb();
   const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
   if (!job) return res.status(404).json({ error: 'Not found' });
 
-  db.prepare('INSERT INTO job_chat (job_id, role, content, mode) VALUES (?, ?, ?, ?)').run(req.params.id, 'user', content, mode);
+  const metaJson = mode === 'interview' && answerMeta ? JSON.stringify(answerMeta) : null;
+  db.prepare('INSERT INTO job_chat (job_id, role, content, mode, answer_meta) VALUES (?, ?, ?, ?, ?)').run(req.params.id, 'user', content, mode, metaJson);
 
   try {
-    const history = db.prepare('SELECT role, content FROM job_chat WHERE job_id = ? AND mode = ? ORDER BY created_at ASC').all(req.params.id, mode);
     const cvText = clientCvText ?? cvForJob(job);
+
+    // For interview mode, enrich history with answer metadata so Claude can reference it in the assessment
+    let history;
+    if (mode === 'interview') {
+      const raw = db.prepare('SELECT role, content, answer_meta FROM job_chat WHERE job_id = ? AND mode = ? ORDER BY created_at ASC').all(req.params.id, mode);
+      history = raw.map(m => {
+        if (m.role === 'user' && m.answer_meta) {
+          try {
+            const meta = JSON.parse(m.answer_meta);
+            const parts = [];
+            if (meta.duration != null) {
+              const min = Math.floor(meta.duration / 60), sec = meta.duration % 60;
+              parts.push(min > 0 ? `${min}m ${sec}s` : `${sec}s`);
+            }
+            if (meta.wordCount) parts.push(`${meta.wordCount} words`);
+            if (meta.fillerWords && Object.keys(meta.fillerWords).length > 0) {
+              const fs = Object.entries(meta.fillerWords).map(([w, n]) => `"${w}" x${n}`).join(', ');
+              parts.push(`Filler words: ${fs}`);
+            }
+            if (parts.length) return { role: m.role, content: `[Answer: ${parts.join(' | ')}]\n${m.content}` };
+          } catch {}
+        }
+        return { role: m.role, content: m.content };
+      });
+    } else {
+      history = db.prepare('SELECT role, content FROM job_chat WHERE job_id = ? AND mode = ? ORDER BY created_at ASC').all(req.params.id, mode);
+    }
+
     const { text, model: aiModel } = mode === 'interview'
       ? await interviewChat(history, job, cvText)
       : await jobChat(history, job, cvText);
@@ -237,6 +265,50 @@ router.post('/:id/chat', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// GET /api/jobs/:id/interview-runs — list saved runs newest first
+router.get('/:id/interview-runs', (req, res) => {
+  const runs = getDb().prepare(
+    'SELECT id, created_at, substr(transcript, 1, 200) as preview FROM job_interview_runs WHERE job_id = ? ORDER BY created_at DESC'
+  ).all(req.params.id);
+  res.json(runs);
+});
+
+// GET /api/jobs/:id/interview-runs/:runId — full transcript
+router.get('/:id/interview-runs/:runId', (req, res) => {
+  const run = getDb().prepare('SELECT * FROM job_interview_runs WHERE id = ? AND job_id = ?').get(req.params.runId, req.params.id);
+  if (!run) return res.status(404).json({ error: 'Not found' });
+  res.json(run);
+});
+
+// POST /api/jobs/:id/interview-runs/save — save current interview then clear messages
+router.post('/:id/interview-runs/save', (req, res) => {
+  const db = getDb();
+  const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'Not found' });
+
+  const msgs = db.prepare("SELECT role, content FROM job_chat WHERE job_id = ? AND mode = 'interview' ORDER BY created_at ASC").all(req.params.id);
+  if (msgs.length === 0) return res.status(400).json({ error: 'No interview to save' });
+
+  const userName = getSetting('display_name') || 'Candidate';
+  const lines = msgs.map(m => {
+    const speaker = m.role === 'user' ? userName : 'Interviewer';
+    return `${speaker}:\n${m.content}`;
+  });
+  const header = `Mock Interview — ${job.title} at ${job.company}\nDate: ${new Date().toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })}\n\n${'─'.repeat(60)}\n\n`;
+  const transcript = header + lines.join('\n\n');
+
+  db.prepare('INSERT INTO job_interview_runs (job_id, transcript) VALUES (?, ?)').run(req.params.id, transcript);
+  db.prepare("DELETE FROM job_chat WHERE job_id = ? AND mode = 'interview'").run(req.params.id);
+
+  res.json({ ok: true });
+});
+
+// DELETE /api/jobs/:id/interview-runs/:runId
+router.delete('/:id/interview-runs/:runId', (req, res) => {
+  getDb().prepare('DELETE FROM job_interview_runs WHERE id = ? AND job_id = ?').run(req.params.runId, req.params.id);
+  res.json({ ok: true });
 });
 
 // POST /api/jobs/:id/cover-letter  (generate)

@@ -77,14 +77,17 @@ async function scrapeSeekUrl(context, url) {
           }
         }
         const txt = el.textContent.trim();
+        const fmt = d => d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
         const dMatch = txt.match(/^(\d+)\s*d(?:ays?)?\s+ago/i);
-        if (dMatch) {
-          const d = new Date(); d.setDate(d.getDate() - parseInt(dMatch[1]));
-          return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+        if (dMatch) { const d = new Date(); d.setDate(d.getDate() - parseInt(dMatch[1])); return fmt(d); }
+        const wMatch = txt.match(/^(\d+)\s*w(?:eeks?)?\s+ago/i);
+        if (wMatch) { const d = new Date(); d.setDate(d.getDate() - parseInt(wMatch[1]) * 7); return fmt(d); }
+        const mMatch = txt.match(/^(\d+)\s*m(?:o(?:nths?)?)?\s+ago/i);
+        if (mMatch) { const d = new Date(); d.setMonth(d.getMonth() - parseInt(mMatch[1])); return fmt(d); }
+        if (txt.match(/^(\d+)\s*h(?:ours?)?\s+ago/i) || txt.match(/just\s+posted|today/i)) {
+          return fmt(new Date());
         }
-        if (txt.match(/^(\d+)\s*h(?:ours?)?\s+ago/i)) {
-          return new Date().toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
-        }
+        if (txt.match(/30\+?\s*days/i)) { const d = new Date(); d.setDate(d.getDate() - 30); return fmt(d); }
         return txt;
       }
 
@@ -238,14 +241,17 @@ async function scrapeTradeMeUrl(context, url) {
           }
         }
         const txt = el.textContent.trim();
+        const fmt = d => d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
         const dMatch = txt.match(/^(\d+)\s*d(?:ays?)?\s+ago/i);
-        if (dMatch) {
-          const d = new Date(); d.setDate(d.getDate() - parseInt(dMatch[1]));
-          return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+        if (dMatch) { const d = new Date(); d.setDate(d.getDate() - parseInt(dMatch[1])); return fmt(d); }
+        const wMatch = txt.match(/^(\d+)\s*w(?:eeks?)?\s+ago/i);
+        if (wMatch) { const d = new Date(); d.setDate(d.getDate() - parseInt(wMatch[1]) * 7); return fmt(d); }
+        const mMatch = txt.match(/^(\d+)\s*m(?:o(?:nths?)?)?\s+ago/i);
+        if (mMatch) { const d = new Date(); d.setMonth(d.getMonth() - parseInt(mMatch[1])); return fmt(d); }
+        if (txt.match(/^(\d+)\s*h(?:ours?)?\s+ago/i) || txt.match(/just\s+posted|today/i)) {
+          return fmt(new Date());
         }
-        if (txt.match(/^(\d+)\s*h(?:ours?)?\s+ago/i)) {
-          return new Date().toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
-        }
+        if (txt.match(/30\+?\s*days/i)) { const d = new Date(); d.setDate(d.getDate() - 30); return fmt(d); }
         return txt;
       }
 
