@@ -1,10 +1,28 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Icon from '../../ui/Icon'
 import { FitRing } from '../../ui/FitScore'
+import api from '../../../hooks/useApi'
+
+const ACTION_LABELS = {
+  'ADDED':                    'Job added',
+  'MOVED':                    'Status changed',
+  'SCORED':                   'AI scored',
+  'ARCHIVED':                 'Archived',
+  'COVER-LETTER-GENERATED':   'Cover letter generated',
+  'COVER-LETTER-EXPORTED-PDF':'Cover letter exported (PDF)',
+  'COVER-LETTER-EXPORTED-WORD':'Cover letter exported (Word)',
+  'FILE-ATTACHED':            'File attached',
+}
 
 export default function OverviewTab({ job, saveJob, descFetching, descError, onRefetchDesc }) {
-  const [deadline, setDeadline] = useState(job.deadline || '')
-  const [saving, setSaving] = useState(false)
+  const [deadline,   setDeadline]   = useState(job.deadline || '')
+  const [saving,     setSaving]     = useState(false)
+  const [rescoring,  setRescoring]  = useState(false)
+  const [activity,   setActivity]   = useState(null)
+
+  useEffect(() => {
+    api.get(`/jobs/${job.id}/activity`).then(setActivity).catch(() => setActivity([]))
+  }, [job.id])
 
   const save = async (field, value) => {
     setSaving(true)
@@ -18,8 +36,26 @@ export default function OverviewTab({ job, saveJob, descFetching, descError, onR
         <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', padding: '16px 18px', borderRadius: 'var(--radius)', background: 'var(--bg-2)', border: '1px solid var(--rule)' }}>
           <FitRing value={job.fit_score} size={64} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)', marginBottom: 6 }}>
-              {job.fit_score >= 85 ? 'Strong match' : job.fit_score >= 70 ? 'Good match' : job.fit_score >= 50 ? 'Partial match' : 'Low match'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
+                {job.fit_score >= 85 ? 'Strong match' : job.fit_score >= 70 ? 'Good match' : job.fit_score >= 50 ? 'Partial match' : 'Low match'}
+              </div>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '2px 6px', fontSize: 11, opacity: 0.6 }}
+                disabled={rescoring}
+                title="Re-score against your CV"
+                onClick={async () => {
+                  setRescoring(true)
+                  try {
+                    const result = await api.post(`/jobs/${job.id}/ai-score`)
+                    saveJob({ fit_score: result.fit_score, ai_summary: result.summary, skills_gaps: result.skills_gaps })
+                  } catch {}
+                  setRescoring(false)
+                }}
+              >
+                {rescoring ? <span className="spinner" /> : <Icon name="refresh" size={10} />}
+              </button>
             </div>
             <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, color: 'var(--ink-2)' }}>
               {job.ai_summary || `Your profile matches ${job.fit_score}% of the listing's stated requirements.`}
@@ -89,14 +125,26 @@ export default function OverviewTab({ job, saveJob, descFetching, descError, onR
 
       <div>
         <div className="eyebrow" style={{ marginBottom: 10 }}>Activity</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontSize: 13, color: 'var(--ink-2)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: 14 }}>
-            <span className="mono" style={{ color: 'var(--ink-4)', fontSize: 11 }}>
-              {new Date(job.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }).toUpperCase()}
-            </span>
-            <span>Job added from {job.source || 'manual'} · matched {job.fit_score != null ? `${job.fit_score}%` : 'not scored'}</span>
+        {activity === null ? (
+          <span className="spinner" />
+        ) : activity.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--ink-3)', fontStyle: 'italic' }}>No activity logged yet.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, color: 'var(--ink-2)' }}>
+            {activity.map(a => (
+              <div key={a.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: 14, alignItems: 'baseline' }}>
+                <span className="mono" style={{ color: 'var(--ink-4)', fontSize: 11 }}>
+                  {new Date(a.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }).toUpperCase()}
+                </span>
+                <span>
+                  {ACTION_LABELS[a.action] || a.action}
+                  {a.reason ? <span style={{ color: 'var(--ink-3)' }}> · {a.reason}</span> : null}
+                  {a.trigger_type === 'AUTO' && <span style={{ marginLeft: 6, fontSize: 10, fontFamily: 'var(--font-mono)', background: 'var(--accent-soft)', color: 'var(--accent)', padding: '1px 5px', borderRadius: 3 }}>AUTO</span>}
+                </span>
+              </div>
+            ))}
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

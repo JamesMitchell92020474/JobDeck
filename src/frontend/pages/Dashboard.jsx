@@ -63,9 +63,10 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
   const { jobs, setJobs, loadJobs, getSourceColors, settings } = useApp()
 
   // Local state for dashboard-specific data.
-  const [welcome,        setWelcome]        = useState('')      // AI welcome message text
-  const [statsData,      setStats]          = useState(null)    // pipeline counts from the API
-  const [loadingWelcome, setLoadingWelcome] = useState(true)   // show spinner while fetching welcome
+  const [welcome,         setWelcome]        = useState('')
+  const [statsData,       setStats]          = useState(null)
+  const [loadingWelcome,  setLoadingWelcome] = useState(true)
+  const [refreshingWelcome, setRefreshingWelcome] = useState(false)
   const [news,           setNews]           = useState([])      // news feed articles
   const [syncing,        setSyncing]        = useState(false)   // true while the scraper is running
   const [syncResult,     setSyncResult]     = useState(null)    // message shown after scraping
@@ -177,21 +178,38 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
           {loadingWelcome
             ? <span className="spinner" style={{ display: 'inline-block', verticalAlign: 'middle' }} />
             : welcome}
+          {!loadingWelcome && (
+            <button
+              onClick={async () => {
+                setRefreshingWelcome(true)
+                const d = await api.get('/stats/welcome?refresh=1').catch(() => null)
+                if (d?.message) setWelcome(d.message)
+                setRefreshingWelcome(false)
+              }}
+              disabled={refreshingWelcome}
+              title="Regenerate welcome message"
+              style={{ marginLeft: 10, background: 'none', border: 'none', cursor: 'pointer', opacity: 0.4, padding: 0, verticalAlign: 'middle' }}
+            >
+              {refreshingWelcome
+                ? <span className="spinner" style={{ display: 'inline-block', width: 11, height: 11 }} />
+                : <Icon name="refresh" size={13} />}
+            </button>
+          )}
         </p>
       </div>
 
       {/* Quick actions */}
       <div className="dash-actions">
-        <button className="btn btn-ghost btn-sm" onClick={handleSync} disabled={syncing}>
+        <button className="btn-ai-filter" onClick={handleSync} disabled={syncing} title="Scrape Seek and Trade Me Jobs for new listings">
           {syncing
-            ? <span className="spinner" style={{ width: 11, height: 11 }} />
-            : <Icon name="refresh" size={12} />}
+            ? <span className="spinner" style={{ width: 11, height: 11, borderColor: 'rgba(255,255,255,.35)', borderTopColor: '#fff' }} />
+            : <Icon name="refresh" size={13} />}
           {syncing ? 'Syncing…' : 'Sync sources'}
         </button>
         {syncResult != null && (
           <span className="dash-action-note">{syncResult > 0 ? `+${syncResult} new` : 'Up to date'}</span>
         )}
-        <button className="btn-ai-filter dash-ai-btn" onClick={handleFilter} disabled={filtering}>
+        <button className="btn-ai-filter dash-ai-btn" onClick={handleFilter} disabled={filtering} title="Score new jobs against your CV and archive poor fits">
           {filtering
             ? <span className="spinner" style={{ width: 11, height: 11, borderColor: 'rgba(255,255,255,.35)', borderTopColor: '#fff' }} />
             : <Icon name="wand" size={12} />}

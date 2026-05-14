@@ -88,6 +88,14 @@ async function scrapeSeekUrl(context, url) {
           return fmt(new Date());
         }
         if (txt.match(/30\+?\s*days/i)) { const d = new Date(); d.setDate(d.getDate() - 30); return fmt(d); }
+        const listedYesterday = txt.match(/listed\s+yesterday/i);
+        if (listedYesterday) { const d = new Date(); d.setDate(d.getDate() - 1); return fmt(d); }
+        const listedToday = txt.match(/listed\s+today/i);
+        if (listedToday) return fmt(new Date());
+        const listedD = txt.match(/listed\s+(\d+)\s*d(?:ays?)?\s+ago/i);
+        if (listedD) { const d = new Date(); d.setDate(d.getDate() - parseInt(listedD[1])); return fmt(d); }
+        const listedH = txt.match(/listed\s+(\d+)\s*h(?:ours?)?\s+ago/i);
+        if (listedH) return fmt(new Date());
         return txt;
       }
 
@@ -252,6 +260,14 @@ async function scrapeTradeMeUrl(context, url) {
           return fmt(new Date());
         }
         if (txt.match(/30\+?\s*days/i)) { const d = new Date(); d.setDate(d.getDate() - 30); return fmt(d); }
+        const listedYesterday = txt.match(/listed\s+yesterday/i);
+        if (listedYesterday) { const d = new Date(); d.setDate(d.getDate() - 1); return fmt(d); }
+        const listedToday = txt.match(/listed\s+today/i);
+        if (listedToday) return fmt(new Date());
+        const listedD = txt.match(/listed\s+(\d+)\s*d(?:ays?)?\s+ago/i);
+        if (listedD) { const d = new Date(); d.setDate(d.getDate() - parseInt(listedD[1])); return fmt(d); }
+        const listedH = txt.match(/listed\s+(\d+)\s*h(?:ours?)?\s+ago/i);
+        if (listedH) return fmt(new Date());
         return txt;
       }
 
@@ -317,9 +333,31 @@ function locationMatches(jobLocation, configuredLocation) {
   return keywords.some(k => loc.includes(k));
 }
 
+function isExcludedByDescription(plainText, category) {
+  const toTerms = (raw) => (raw || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+  const terms = category === 'tech'        ? toTerms(getSetting('scraper_keywords_exclude_tech'))
+              : category === 'hospitality' ? toTerms(getSetting('scraper_keywords_exclude_hospitality'))
+              : [];
+  if (!terms.length) return false;
+  const t = plainText.toLowerCase();
+  return terms.some(k => t.includes(k));
+}
+
 function saveJobsToDB(jobs) {
   const db = getDb();
   const configuredLocation = getSetting('scraper_location') || 'Christchurch';
+
+  const toExcludeTerms = (raw) =>
+    (raw || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+  const excludeTech  = toExcludeTerms(getSetting('scraper_keywords_exclude_tech'));
+  const excludeHosp  = toExcludeTerms(getSetting('scraper_keywords_exclude_hospitality'));
+
+  const isExcluded = (title, category) => {
+    const t = title.toLowerCase();
+    const terms = category === 'tech' ? excludeTech : category === 'hospitality' ? excludeHosp : [];
+    return terms.some(k => t.includes(k));
+  };
+
   let saved = 0;
   const newJobs = [];
 
@@ -334,6 +372,7 @@ function saveJobsToDB(jobs) {
       if (!j.title) continue;
       if (!locationMatches(j.location, configuredLocation)) continue;
       if (normaliseJobType(j.job_type) === 'Casual') continue;
+      if (isExcluded(j.title, autoTag(j.title))) continue;
       const exists = db.prepare('SELECT id FROM jobs WHERE title = ? AND company = ? AND source = ?')
         .get(j.title, j.company || '', j.source);
       if (!exists) {
@@ -375,6 +414,15 @@ async function fetchDescriptionsForNewJobs(context, newJobs) {
           ...(jobType && !job.job_type ? [jobType] : []),
           result.salary || '', job.id
         );
+
+      // Strip HTML tags for keyword matching
+      const descPlain = result.html.replace(/<[^>]+>/g, ' ');
+      if (isExcludedByDescription(descPlain, job.job_category)) {
+        db.prepare("UPDATE jobs SET status = 'Archived', updated_at = datetime('now') WHERE id = ?").run(job.id);
+        log({ type: 'activity', trigger: 'AUTO', action: 'ARCHIVED', jobId: job.id, jobTitle: job.title, company: job.company, source: job.source, reason: 'Exclude keyword found in description' });
+        done++;
+        continue;
+      }
 
       const cvText = cvForJob(job);
       if (cvText) {
@@ -437,4 +485,4 @@ async function runScrape(sources = ['Seek', 'Trade Me Jobs']) {
   return results;
 }
 
-module.exports = { runScrape, fetchDescriptionsForNewJobs };
+module.exports = { runScrape, fetchDescriptionsForNewJobs, isExcludedByDescription };

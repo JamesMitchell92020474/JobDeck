@@ -229,6 +229,250 @@ export default function Settings() {
         <h1>Settings</h1>
       </div>
 
+      {/* Profile & CV */}
+      <div className="set-group">
+        <h3>Profile &amp; CV</h3>
+        <div className="set-row">
+          <div className="lbl">Display name</div>
+          <input
+            className="input"
+            style={{ maxWidth: 320 }}
+            defaultValue={settings.display_name || ''}
+            onBlur={e => saveSetting('display_name', e.target.value)}
+          />
+        </div>
+        {[
+          { key: 'tech',        labelKey: 'cv_label_1', fallback: 'CV Profile 1' },
+          { key: 'hospitality', labelKey: 'cv_label_2', fallback: 'CV Profile 2' },
+        ].map(({ key, labelKey, fallback }) => {
+          const profileLabel = settings[labelKey] || fallback
+          const filename   = settings[`cv_filename_${key}`]
+          const size       = settings[`cv_size_${key}`]
+          const uploadedAt = settings[`cv_uploaded_at_${key}`]
+          return (
+            <div key={key} className="set-row">
+              <div className="lbl">
+                <input
+                  key={profileLabel}
+                  className="input"
+                  style={{ maxWidth: 200, fontSize: 13, marginBottom: 4 }}
+                  defaultValue={profileLabel}
+                  placeholder={fallback}
+                  onBlur={e => saveSetting(labelKey, e.target.value.trim() || fallback)}
+                />
+                <small>Label shown on job cards</small>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {filename ? (
+                  <>
+                    <div className="file-ic" style={{ width: 32, height: 36 }}>PDF</div>
+                    <div>
+                      <div style={{ fontSize: 13 }}>{filename}</div>
+                      <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                        {size ? Math.round(Number(size) / 1024) + ' KB' : ''}
+                        {uploadedAt ? ' · uploaded ' + new Date(uploadedAt).toLocaleDateString('en-NZ') : ''}
+                      </div>
+                    </div>
+                    <div className="flex-1" />
+                    <button className="btn btn-sm" onClick={() => cvRefs[key].current?.click()}>Replace</button>
+                    <button
+                      className="btn btn-sm"
+                      style={{ color: 'var(--col-rejected)', borderColor: 'var(--col-rejected)' }}
+                      onClick={async () => {
+                        await fetch(`/api/cv?profile=${key}`, { method: 'DELETE' })
+                        await loadSettings()
+                      }}
+                    >Remove</button>
+                  </>
+                ) : (
+                  <button className="btn btn-accent btn-sm" onClick={() => cvRefs[key].current?.click()}>
+                    <Icon name="upload" size={11} /> Upload PDF
+                  </button>
+                )}
+                <input
+                  ref={cvRefs[key]}
+                  type="file"
+                  accept=".pdf"
+                  style={{ display: 'none' }}
+                  onChange={e => e.target.files[0] && uploadCV(e.target.files[0], key)}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Scraper preferences */}
+      <div className="set-group">
+        <h3>Scraper preferences</h3>
+        <div className="help">Keywords and location used when scraping job sites. Separate multiple keywords with commas.</div>
+        <div className="set-row">
+          <div className="lbl">Location<small>City or region to search in</small></div>
+          <input
+            className="input"
+            style={{ maxWidth: 240 }}
+            defaultValue={settings.scraper_location || 'Christchurch'}
+            onBlur={e => saveSetting('scraper_location', e.target.value)}
+          />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Max job age<small>Only pull jobs posted within this many days</small></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              className="input"
+              style={{ maxWidth: 80 }}
+              type="number"
+              min="1"
+              max="90"
+              defaultValue={settings.scraper_max_age_days || '30'}
+              onBlur={e => saveSetting('scraper_max_age_days', e.target.value)}
+            />
+            <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>days</span>
+          </div>
+        </div>
+        <div className="set-row">
+          <div className="lbl">{settings.cv_label_1 || 'CV Profile 1'} keywords<small>Type a keyword and press Enter or comma to add · Backspace removes the last</small></div>
+          <TagInput
+            value={settings.scraper_keywords_tech || 'front end developer, web developer, IT support, systems administrator, Microsoft 365, React, JavaScript, CRM'}
+            onSave={val => saveSetting('scraper_keywords_tech', val)}
+          />
+        </div>
+        <div className="set-row">
+          <div className="lbl">{settings.cv_label_1 || 'CV Profile 1'} exclude keywords<small>Jobs whose title contains any of these will be skipped</small></div>
+          <TagInput
+            value={settings.scraper_keywords_exclude_tech || ''}
+            onSave={val => saveSetting('scraper_keywords_exclude_tech', val)}
+            placeholder="Add keyword to exclude…"
+          />
+        </div>
+        <div className="set-row">
+          <div className="lbl">{settings.cv_label_2 || 'CV Profile 2'} keywords<small>Type a keyword and press Enter or comma to add · Backspace removes the last</small></div>
+          <TagInput
+            value={settings.scraper_keywords_hospitality || 'customer service, barista, cafe, retail assistant, front of house, hospitality'}
+            onSave={val => saveSetting('scraper_keywords_hospitality', val)}
+          />
+        </div>
+        <div className="set-row">
+          <div className="lbl">{settings.cv_label_2 || 'CV Profile 2'} exclude keywords<small>Jobs whose title contains any of these will be skipped</small></div>
+          <TagInput
+            value={settings.scraper_keywords_exclude_hospitality || ''}
+            onSave={val => saveSetting('scraper_keywords_exclude_hospitality', val)}
+            placeholder="Add keyword to exclude…"
+          />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Clean up board<small>Remove scraped jobs that don't match your keywords or location</small></div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            {!cleanupPreview ? (
+              <button
+                className="btn btn-sm"
+                onClick={async () => {
+                  setCleanupRunning(true)
+                  const res = await api.post('/housekeeping/cleanup-unmatched', { dryRun: true }).catch(() => null)
+                  setCleanupPreview(res)
+                  setCleanupRunning(false)
+                }}
+                disabled={cleanupRunning}
+              >
+                {cleanupRunning ? <span className="spinner" /> : null}
+                Preview clean up
+              </button>
+            ) : cleanupPreview.count === 0 ? (
+              <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>
+                All jobs already match your filters.{' '}
+                <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setCleanupPreview(null)}>Reset</span>
+              </span>
+            ) : (
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>
+                  {cleanupPreview.count} job{cleanupPreview.count !== 1 ? 's' : ''} will be removed
+                </span>
+                <button
+                  className="btn btn-sm"
+                  style={{ background: 'var(--col-rejected)', color: '#fff', borderColor: 'var(--col-rejected)' }}
+                  onClick={async () => {
+                    setCleanupRunning(true)
+                    await api.post('/housekeeping/cleanup-unmatched', { dryRun: false }).catch(() => null)
+                    setCleanupPreview(null)
+                    setCleanupRunning(false)
+                    await loadSettings()
+                  }}
+                  disabled={cleanupRunning}
+                >
+                  {cleanupRunning ? <span className="spinner" /> : null}
+                  Remove {cleanupPreview.count} jobs
+                </button>
+                <span
+                  style={{ fontSize: 13, color: 'var(--ink-3)', cursor: 'pointer', textDecoration: 'underline' }}
+                  onClick={() => setCleanupPreview(null)}
+                >
+                  Cancel
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Job sources */}
+      <div className="set-group">
+        <h3>Job sources</h3>
+        <div className="help">Each source has its own colour for charts and badges. Sync manually with the button below, or enable startup sync to run automatically each time the app opens.</div>
+        <div className="set-row">
+          <div className="lbl">Sync on startup<small>Scrape all sources automatically when the app opens</small></div>
+          <span
+            className={`toggle ${settings.sync_on_startup === '1' ? 'on' : ''}`}
+            onClick={() => saveSetting('sync_on_startup', settings.sync_on_startup === '1' ? '0' : '1')}
+          />
+        </div>
+        <div className="sources-table">
+          <div className="sources-head">
+            <span>Source</span>
+            <span>Colour</span>
+            <span>Last sync</span>
+            <span></span>
+            <span>Active</span>
+          </div>
+          {SOURCES.map(src => {
+            const enabled = !disabled[src]
+            const color   = srcColors[src] || DEFAULT_SRC_COLORS[src] || '#888'
+            return (
+              <div key={src} className="sources-row" style={{ opacity: enabled ? 1 : 0.5 }}>
+                <div className="src-name">{src}</div>
+                <label className="src-color">
+                  <span className="src-sw" style={{ background: color }} />
+                  <input type="color" value={color} onChange={e => setSrcColor(src, e.target.value)} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
+                  <span className="mono" style={{ fontSize: 11 }}>{color.toUpperCase()}</span>
+                </label>
+                <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                  {settings[`last_sync_${src}`]
+                    ? new Date(settings[`last_sync_${src}`]).toLocaleString('en-NZ', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                    : '—'}
+                </div>
+                <button
+                  className="btn btn-accent btn-sm"
+                  onClick={() => syncSource(src)}
+                  disabled={!enabled || syncing[src] || syncing.all}
+                >
+                  {syncing[src] ? <span className="spinner" /> : <Icon name="refresh" size={11} />}
+                  Sync now
+                </button>
+                <div className="src-toggle" onClick={() => toggleSrc(src)}>
+                  <span className={`toggle-lbl ${enabled ? '' : 'off'}`}>{enabled ? 'Connected' : 'Disconnected'}</span>
+                  <span className={`toggle ${enabled ? 'on' : ''}`} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <button className="btn btn-accent btn-sm" onClick={syncAll} disabled={syncing.all}>
+            {syncing.all ? <span className="spinner" /> : <Icon name="refresh" size={11} />}
+            Sync all sources
+          </button>
+        </div>
+      </div>
+
       {/* Appearance */}
       <div className="set-group">
         <h3>Appearance</h3>
@@ -294,294 +538,6 @@ export default function Settings() {
 
       </div>
 
-      {/* Scraper preferences */}
-      <div className="set-group">
-        <h3>Scraper preferences</h3>
-        <div className="help">Keywords and location used when scraping job sites. Separate multiple keywords with commas.</div>
-        <div className="set-row">
-          <div className="lbl">Location<small>City or region to search in</small></div>
-          <input
-            className="input"
-            style={{ maxWidth: 240 }}
-            defaultValue={settings.scraper_location || 'Christchurch'}
-            onBlur={e => saveSetting('scraper_location', e.target.value)}
-          />
-        </div>
-        <div className="set-row">
-          <div className="lbl">Max job age<small>Only pull jobs posted within this many days</small></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input
-              className="input"
-              style={{ maxWidth: 80 }}
-              type="number"
-              min="1"
-              max="90"
-              defaultValue={settings.scraper_max_age_days || '30'}
-              onBlur={e => saveSetting('scraper_max_age_days', e.target.value)}
-            />
-            <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>days</span>
-          </div>
-        </div>
-        <div className="set-row">
-          <div className="lbl">{settings.cv_label_1 || 'CV Profile 1'} keywords<small>Type a keyword and press Enter or comma to add · Backspace removes the last</small></div>
-          <TagInput
-            value={settings.scraper_keywords_tech || 'front end developer, web developer, IT support, systems administrator, Microsoft 365, React, JavaScript, CRM'}
-            onSave={val => saveSetting('scraper_keywords_tech', val)}
-          />
-        </div>
-        <div className="set-row">
-          <div className="lbl">{settings.cv_label_2 || 'CV Profile 2'} keywords<small>Type a keyword and press Enter or comma to add · Backspace removes the last</small></div>
-          <TagInput
-            value={settings.scraper_keywords_hospitality || 'customer service, barista, cafe, retail assistant, front of house, hospitality'}
-            onSave={val => saveSetting('scraper_keywords_hospitality', val)}
-          />
-        </div>
-        <div className="set-row">
-          <div className="lbl">Clean up board<small>Remove scraped jobs that don't match your keywords or location</small></div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            {!cleanupPreview ? (
-              <button
-                className="btn btn-sm"
-                onClick={async () => {
-                  setCleanupRunning(true)
-                  const res = await api.post('/housekeeping/cleanup-unmatched', { dryRun: true }).catch(() => null)
-                  setCleanupPreview(res)
-                  setCleanupRunning(false)
-                }}
-                disabled={cleanupRunning}
-              >
-                {cleanupRunning ? <span className="spinner" /> : null}
-                Preview clean up
-              </button>
-            ) : cleanupPreview.count === 0 ? (
-              <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>
-                All jobs already match your filters.{' '}
-                <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setCleanupPreview(null)}>Reset</span>
-              </span>
-            ) : (
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>
-                  {cleanupPreview.count} job{cleanupPreview.count !== 1 ? 's' : ''} will be removed
-                </span>
-                <button
-                  className="btn btn-sm"
-                  style={{ background: 'var(--col-rejected)', color: '#fff', borderColor: 'var(--col-rejected)' }}
-                  onClick={async () => {
-                    setCleanupRunning(true)
-                    await api.post('/housekeeping/cleanup-unmatched', { dryRun: false }).catch(() => null)
-                    setCleanupPreview(null)
-                    setCleanupRunning(false)
-                    await loadSettings()
-                  }}
-                  disabled={cleanupRunning}
-                >
-                  {cleanupRunning ? <span className="spinner" /> : null}
-                  Remove {cleanupPreview.count} jobs
-                </button>
-                <span
-                  style={{ fontSize: 13, color: 'var(--ink-3)', cursor: 'pointer', textDecoration: 'underline' }}
-                  onClick={() => setCleanupPreview(null)}
-                >
-                  Cancel
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Job sources */}
-      <div className="set-group">
-        <h3>Job sources</h3>
-        <div className="help">JobDeck scrapes these sites every morning at 7:00 NZST. Each source has its own colour for charts and badges.</div>
-        <div className="sources-table">
-          <div className="sources-head">
-            <span>Source</span>
-            <span>Colour</span>
-            <span>Last sync</span>
-            <span></span>
-            <span>Active</span>
-          </div>
-          {SOURCES.map(src => {
-            const enabled = !disabled[src]
-            const color   = srcColors[src] || DEFAULT_SRC_COLORS[src] || '#888'
-            return (
-              <div key={src} className="sources-row" style={{ opacity: enabled ? 1 : 0.5 }}>
-                <div className="src-name">{src}</div>
-                <label className="src-color">
-                  <span className="src-sw" style={{ background: color }} />
-                  <input type="color" value={color} onChange={e => setSrcColor(src, e.target.value)} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
-                  <span className="mono" style={{ fontSize: 11 }}>{color.toUpperCase()}</span>
-                </label>
-                <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-                  {settings[`last_sync_${src}`]
-                    ? new Date(settings[`last_sync_${src}`]).toLocaleString('en-NZ', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-                    : '—'}
-                </div>
-                <button
-                  className="btn btn-accent btn-sm"
-                  onClick={() => syncSource(src)}
-                  disabled={!enabled || syncing[src] || syncing.all}
-                >
-                  {syncing[src] ? <span className="spinner" /> : <Icon name="refresh" size={11} />}
-                  Sync now
-                </button>
-                <div className="src-toggle" onClick={() => toggleSrc(src)}>
-                  <span className={`toggle-lbl ${enabled ? '' : 'off'}`}>{enabled ? 'Connected' : 'Disconnected'}</span>
-                  <span className={`toggle ${enabled ? 'on' : ''}`} />
-                </div>
-              </div>
-            )
-          })}
-        </div>
-        <div style={{ marginTop: 10 }}>
-          <button className="btn btn-accent btn-sm" onClick={syncAll} disabled={syncing.all}>
-            {syncing.all ? <span className="spinner" /> : <Icon name="refresh" size={11} />}
-            Sync all sources
-          </button>
-        </div>
-      </div>
-
-      {/* Profile & CV */}
-      <div className="set-group">
-        <h3>Profile &amp; CV</h3>
-        <div className="set-row">
-          <div className="lbl">Display name</div>
-          <input
-            className="input"
-            style={{ maxWidth: 320 }}
-            defaultValue={settings.display_name || ''}
-            onBlur={e => saveSetting('display_name', e.target.value)}
-          />
-        </div>
-        {[
-          { key: 'tech',        labelKey: 'cv_label_1', fallback: 'CV Profile 1' },
-          { key: 'hospitality', labelKey: 'cv_label_2', fallback: 'CV Profile 2' },
-        ].map(({ key, labelKey, fallback }) => {
-          const profileLabel = settings[labelKey] || fallback
-          const filename   = settings[`cv_filename_${key}`]
-          const size       = settings[`cv_size_${key}`]
-          const uploadedAt = settings[`cv_uploaded_at_${key}`]
-          return (
-            <div key={key} className="set-row">
-              <div className="lbl">
-                <input
-                  key={profileLabel}
-                  className="input"
-                  style={{ maxWidth: 200, fontSize: 13, marginBottom: 4 }}
-                  defaultValue={profileLabel}
-                  placeholder={fallback}
-                  onBlur={e => saveSetting(labelKey, e.target.value.trim() || fallback)}
-                />
-                <small>Label shown on job cards</small>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {filename ? (
-                  <>
-                    <div className="file-ic" style={{ width: 32, height: 36 }}>PDF</div>
-                    <div>
-                      <div style={{ fontSize: 13 }}>{filename}</div>
-                      <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-                        {size ? Math.round(Number(size) / 1024) + ' KB' : ''}
-                        {uploadedAt ? ' · uploaded ' + new Date(uploadedAt).toLocaleDateString('en-NZ') : ''}
-                      </div>
-                    </div>
-                    <div className="flex-1" />
-                    <button className="btn btn-sm" onClick={() => cvRefs[key].current?.click()}>Replace</button>
-                  </>
-                ) : (
-                  <button className="btn btn-accent btn-sm" onClick={() => cvRefs[key].current?.click()}>
-                    <Icon name="upload" size={11} /> Upload PDF
-                  </button>
-                )}
-                <input
-                  ref={cvRefs[key]}
-                  type="file"
-                  accept=".pdf"
-                  style={{ display: 'none' }}
-                  onChange={e => e.target.files[0] && uploadCV(e.target.files[0], key)}
-                />
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Housekeeping */}
-      <div className="set-group">
-        <h3>Housekeeping</h3>
-        <div className="set-row">
-          <div className="lbl">Archive after<small>Days without expiry before auto-archiving</small></div>
-          <input className="input" style={{ maxWidth: 100 }} type="number" min={1} max={365}
-            defaultValue={settings.hk_age_days || '30'}
-            onBlur={e => saveSetting('hk_age_days', e.target.value)} />
-        </div>
-        <div className="set-row">
-          <div className="lbl">Soft-delete after<small>Days in Archived or Rejected before soft-deleting</small></div>
-          <input className="input" style={{ maxWidth: 100 }} type="number" min={1}
-            defaultValue={settings.hk_soft_days || '90'}
-            onBlur={e => saveSetting('hk_soft_days', e.target.value)} />
-        </div>
-        <div className="set-row">
-          <div className="lbl">Hard-delete after<small>Days after soft-delete before permanent removal</small></div>
-          <input className="input" style={{ maxWidth: 100 }} type="number" min={1}
-            defaultValue={settings.hk_hard_days || '14'}
-            onBlur={e => saveSetting('hk_hard_days', e.target.value)} />
-        </div>
-        <div>
-          <button className="btn btn-sm" onClick={runHousekeeping} disabled={hkRunning}>
-            {hkRunning ? <span className="spinner" /> : <Icon name="refresh" size={11} />}
-            Run housekeeping now
-          </button>
-          {hkResult && (
-            <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginLeft: 12 }}>
-              Archived {hkResult.archived} · soft-deleted {hkResult.softDeleted} · hard-deleted {hkResult.hardDeleted}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Data & Storage */}
-      <div className="set-group">
-        <h3>Data &amp; storage</h3>
-        <div className="set-row">
-          <div className="lbl">Data path</div>
-          <input className="input" style={{ maxWidth: 360 }} defaultValue={settings.data_path || 'D:\\JobDeck\\data'} disabled />
-        </div>
-        <div className="set-row">
-          <div className="lbl">Backup path<small>Where zip backups are saved</small></div>
-          <input
-            className="input"
-            style={{ maxWidth: 360 }}
-            defaultValue={settings.backup_path || 'D:\\JobDeck\\backups'}
-            onBlur={e => saveSetting('backup_path', e.target.value)}
-          />
-        </div>
-        <div className="set-row">
-          <div className="lbl">Log path<small>Where rotating monthly log files are written</small></div>
-          <input
-            className="input"
-            style={{ maxWidth: 360 }}
-            defaultValue={settings.log_path || 'D:\\JobDeck\\logs'}
-            onBlur={e => saveSetting('log_path', e.target.value)}
-          />
-        </div>
-        <div style={{ marginBottom: 16 }}>
-          <button className="btn btn-sm" onClick={exportBackup}>
-            <Icon name="download" size={11} /> Export backup
-          </button>
-        </div>
-        <div className="set-row">
-          <div className="lbl">Low disk warning</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <input className="input" style={{ maxWidth: 80 }} type="number" min={1}
-              defaultValue={settings.low_disk_gb || '2'}
-              onBlur={e => saveSetting('low_disk_gb', e.target.value)} />
-            <span style={{ color: 'var(--ink-3)', fontSize: 13 }}>GB</span>
-          </div>
-        </div>
-      </div>
-
       {/* AI */}
       <div className="set-group">
         <h3>AI</h3>
@@ -620,11 +576,89 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* Housekeeping */}
+      <div className="set-group">
+        <h3>Housekeeping</h3>
+        <div className="set-row">
+          <div className="lbl">Archive after<small>Days without expiry before auto-archiving</small></div>
+          <input className="input" style={{ maxWidth: 100 }} type="number" min={1} max={365}
+            defaultValue={settings.hk_age_days || '30'}
+            onBlur={e => saveSetting('hk_age_days', e.target.value)} />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Soft-delete after<small>Days in Archived or Rejected before soft-deleting</small></div>
+          <input className="input" style={{ maxWidth: 100 }} type="number" min={1}
+            defaultValue={settings.hk_soft_days || '90'}
+            onBlur={e => saveSetting('hk_soft_days', e.target.value)} />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Hard-delete after<small>Days after soft-delete before permanent removal</small></div>
+          <input className="input" style={{ maxWidth: 100 }} type="number" min={1}
+            defaultValue={settings.hk_hard_days || '14'}
+            onBlur={e => saveSetting('hk_hard_days', e.target.value)} />
+        </div>
+        <div>
+          <button className="btn btn-sm" onClick={runHousekeeping} disabled={hkRunning}>
+            {hkRunning ? <span className="spinner" /> : <Icon name="refresh" size={11} />}
+            Run housekeeping now
+          </button>
+          {hkResult && (
+            <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginLeft: 12 }}>
+              Archived {hkResult.archived} · soft-deleted {hkResult.softDeleted} · hard-deleted {hkResult.hardDeleted}
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Cover letter template */}
       <div className="set-group">
         <h3>Cover letter template</h3>
         <div className="help">Used as the basis for all AI-generated cover letters. Define your preferred structure, tone, and sign-off.</div>
         <CoverLetterTemplate />
+      </div>
+
+      {/* Data & Storage */}
+      <div className="set-group">
+        <h3>Data &amp; storage</h3>
+        <div className="set-row">
+          <div className="lbl">Data path</div>
+          <input className="input" style={{ maxWidth: 360 }} defaultValue={settings.data_path || 'D:\\JobDeck\\data'} disabled />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Backup path<small>Where zip backups are saved</small></div>
+          <input
+            className="input"
+            style={{ maxWidth: 360 }}
+            defaultValue={settings.backup_path || 'D:\\JobDeck\\backups'}
+            onBlur={e => saveSetting('backup_path', e.target.value)}
+          />
+        </div>
+        <div className="set-row">
+          <div className="lbl">Log path<small>Where rotating monthly log files are written</small></div>
+          <input
+            className="input"
+            style={{ maxWidth: 360 }}
+            defaultValue={settings.log_path || 'D:\\JobDeck\\logs'}
+            onBlur={e => saveSetting('log_path', e.target.value)}
+          />
+        </div>
+        <div style={{ marginBottom: 16, display: 'flex', gap: 10 }}>
+          <button className="btn btn-sm" onClick={exportBackup}>
+            <Icon name="download" size={11} /> Export backup
+          </button>
+          <button className="btn btn-sm" onClick={() => window.dispatchEvent(new CustomEvent('preview-wizard'))} title="Preview the first-run setup wizard">
+            <Icon name="settings" size={11} /> Preview setup wizard
+          </button>
+        </div>
+        <div className="set-row">
+          <div className="lbl">Low disk warning</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input className="input" style={{ maxWidth: 80 }} type="number" min={1}
+              defaultValue={settings.low_disk_gb || '2'}
+              onBlur={e => saveSetting('low_disk_gb', e.target.value)} />
+            <span style={{ color: 'var(--ink-3)', fontSize: 13 }}>GB</span>
+          </div>
+        </div>
       </div>
 
       {/* Log viewer */}

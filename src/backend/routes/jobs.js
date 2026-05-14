@@ -91,7 +91,7 @@ router.post('/', (req, res) => {
          salary||'', job_type||'', deadline||'', posting_date||'', expiry_date||'',
          is_remote?1:0, is_hybrid?1:0, resolvedStatus, job_category);
   const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(r.lastInsertRowid);
-  log({ type: 'activity', trigger: 'MANUAL', action: 'ADDED', jobTitle: title, company, source: source || 'Manual' });
+  log({ type: 'activity', trigger: 'MANUAL', action: 'ADDED', jobId: job?.id, jobTitle: title, company, source: source || 'Manual' });
   res.json(job);
 });
 
@@ -107,32 +107,46 @@ let descFetchInProgress = false;
 router.post('/filter-new', async (req, res) => {
   const threshold = parseInt(getSetting('ai_filter_threshold') || '40', 10);
   const db = getDb();
+
+  // Score any unscored job with a description that's still active (not Archived/Rejected)
+  const unscoredActive = db.prepare(`
+    SELECT * FROM jobs WHERE fit_score IS NULL AND description IS NOT NULL AND description != ''
+      AND status NOT IN ('Archived','Rejected') AND is_soft_deleted = 0
+  `).all();
+
+  // Also get all New jobs (for archiving poor fits + background description fetch)
   const newJobs = db.prepare('SELECT * FROM jobs WHERE status = ? AND is_soft_deleted = 0').all('New');
-  if (newJobs.length === 0) return res.json({ archived: [], kept: 0, scored: 0, fetching: 0 });
+
+  if (newJobs.length === 0 && unscoredActive.length === 0)
+    return res.json({ archived: [], kept: 0, scored: 0, fetching: 0 });
 
   const archived = [];
   let scored = 0;
 
+  // Score all unscored active jobs regardless of pipeline stage
+  for (const job of unscoredActive) {
+    try {
+      const cvText = cvForJob(job);
+      if (!cvText) continue;
+      const result = await scoreFit(job.description, cvText);
+      db.prepare(`UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?, description_summary = ?, updated_at = datetime('now') WHERE id = ?`)
+        .run(result.fit_score, result.summary, JSON.stringify(result.skills_gaps || []), result.description_summary || null, job.id);
+      scored++;
+      // Only archive if still in New
+      if (job.status === 'New' && result.fit_score < threshold) {
+        db.prepare("UPDATE jobs SET status = 'Archived', updated_at = datetime('now') WHERE id = ?").run(job.id);
+        log({ type: 'activity', trigger: 'AI', action: 'ARCHIVED', jobId: job.id, jobTitle: job.title, company: job.company, source: job.source, reason: `AI filter: fit score ${result.fit_score} below threshold ${threshold}` });
+        archived.push({ id: job.id, title: job.title, company: job.company, fit_score: result.fit_score });
+      }
+    } catch {}
+  }
+
+  // Archive already-scored New jobs that are below threshold
   for (const job of newJobs) {
-    let fitScore = job.fit_score;
-
-    if (fitScore == null && job.description) {
-      try {
-        const cvText = cvForJob(job);
-        if (cvText) {
-          const result = await scoreFit(job.description, cvText);
-          fitScore = result.fit_score;
-          db.prepare(`UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?, description_summary = ?, updated_at = datetime('now') WHERE id = ?`)
-            .run(result.fit_score, result.summary, JSON.stringify(result.skills_gaps || []), result.description_summary || null, job.id);
-          scored++;
-        }
-      } catch {}
-    }
-
-    if (fitScore != null && fitScore < threshold) {
+    if (job.fit_score != null && job.fit_score < threshold && !archived.find(a => a.id === job.id)) {
       db.prepare("UPDATE jobs SET status = 'Archived', updated_at = datetime('now') WHERE id = ?").run(job.id);
-      log({ type: 'activity', trigger: 'AI', action: 'ARCHIVED', jobTitle: job.title, company: job.company, source: job.source, reason: `AI filter: fit score ${fitScore} below threshold ${threshold}` });
-      archived.push({ id: job.id, title: job.title, company: job.company, fit_score: fitScore });
+      log({ type: 'activity', trigger: 'AI', action: 'ARCHIVED', jobId: job.id, jobTitle: job.title, company: job.company, source: job.source, reason: `AI filter: fit score ${job.fit_score} below threshold ${threshold}` });
+      archived.push({ id: job.id, title: job.title, company: job.company, fit_score: job.fit_score });
     }
   }
 
@@ -196,7 +210,7 @@ router.put('/:id/move', (req, res) => {
   const job = getDb().prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
   if (!job) return res.status(404).json({ error: 'Not found' });
   getDb().prepare("UPDATE jobs SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, req.params.id);
-  log({ type: 'activity', trigger: 'MANUAL', action: 'MOVED', jobTitle: job.title, company: job.company, source: job.source, reason: `Moved to ${status}` });
+  log({ type: 'activity', trigger: 'MANUAL', action: 'MOVED', jobId: parseInt(req.params.id), jobTitle: job.title, company: job.company, source: job.source, reason: `Moved to ${status}` });
   res.json({ ok: true });
 });
 
@@ -219,10 +233,17 @@ router.post('/:id/ai-score', async (req, res) => {
     getDb().prepare(`
       UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?, description_summary = ?, updated_at = datetime('now') WHERE id = ?
     `).run(result.fit_score, result.summary, JSON.stringify(result.skills_gaps || []), result.description_summary || null, req.params.id);
+    log({ type: 'activity', trigger: 'MANUAL', action: 'SCORED', jobId: parseInt(req.params.id), jobTitle: job.title, company: job.company, reason: `Fit score: ${result.fit_score}` });
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// GET /api/jobs/:id/activity
+router.get('/:id/activity', (req, res) => {
+  const { getLogs } = require('../services/logger');
+  res.json(getLogs({ jobId: parseInt(req.params.id), limit: 50 }));
 });
 
 // GET /api/jobs/:id/chat-context
@@ -242,6 +263,13 @@ router.get('/:id/chat', (req, res) => {
   const mode = req.query.mode || 'chat';
   const msgs = getDb().prepare('SELECT * FROM job_chat WHERE job_id = ? AND mode = ? ORDER BY created_at ASC').all(req.params.id, mode);
   res.json(msgs);
+});
+
+// DELETE /api/jobs/:id/chat?mode=interview — clears in-progress messages without saving
+router.delete('/:id/chat', (req, res) => {
+  const mode = req.query.mode || 'chat';
+  getDb().prepare('DELETE FROM job_chat WHERE job_id = ? AND mode = ?').run(req.params.id, mode);
+  res.json({ ok: true });
 });
 
 // POST /api/jobs/:id/chat
@@ -371,7 +399,7 @@ router.post('/:id/cover-letter', async (req, res) => {
     const tmpl    = db.prepare('SELECT content FROM cover_letter_template WHERE id = 1').get();
     const text    = await generateCoverLetter(job, cvText, tmpl?.content || '');
     db.prepare("UPDATE jobs SET cover_letter = ?, updated_at = datetime('now') WHERE id = ?").run(text, req.params.id);
-    log({ type: 'activity', trigger: 'MANUAL', action: 'COVER-LETTER-GENERATED', jobTitle: job.title, company: job.company });
+    log({ type: 'activity', trigger: 'MANUAL', action: 'COVER-LETTER-GENERATED', jobId: parseInt(req.params.id), jobTitle: job.title, company: job.company });
     res.json({ content: text });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -396,7 +424,7 @@ router.post('/:id/export-pdf', async (req, res) => {
       .run(req.params.id, filename, filename, 'application/pdf', stat.size, filePath);
     const fileRecord = db.prepare('SELECT * FROM job_files WHERE id = ?').get(insert.lastInsertRowid);
 
-    log({ type: 'activity', trigger: 'MANUAL', action: 'COVER-LETTER-EXPORTED-PDF', jobTitle: job.title, company: job.company });
+    log({ type: 'activity', trigger: 'MANUAL', action: 'COVER-LETTER-EXPORTED-PDF', jobId: parseInt(req.params.id), jobTitle: job.title, company: job.company });
     res.json({ filename, path: filePath, file: fileRecord });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -421,7 +449,7 @@ router.post('/:id/export-word', async (req, res) => {
       .run(req.params.id, filename, filename, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', stat.size, filePath);
     const fileRecord = db.prepare('SELECT * FROM job_files WHERE id = ?').get(insert.lastInsertRowid);
 
-    log({ type: 'activity', trigger: 'MANUAL', action: 'COVER-LETTER-EXPORTED-WORD', jobTitle: job.title, company: job.company });
+    log({ type: 'activity', trigger: 'MANUAL', action: 'COVER-LETTER-EXPORTED-WORD', jobId: parseInt(req.params.id), jobTitle: job.title, company: job.company });
     res.json({ filename, path: filePath, file: fileRecord });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -434,7 +462,7 @@ router.post('/:id/files', fileUpload.single('file'), (req, res) => {
   getDb().prepare('INSERT INTO job_files (job_id, filename, original_name, file_type, file_size, file_path) VALUES (?, ?, ?, ?, ?, ?)')
     .run(req.params.id, filename, originalname, mimetype, size, filePath);
   const job = getDb().prepare('SELECT title, company FROM jobs WHERE id = ?').get(req.params.id);
-  log({ type: 'activity', trigger: 'MANUAL', action: 'FILE-ATTACHED', jobTitle: job?.title, company: job?.company, reason: originalname });
+  log({ type: 'activity', trigger: 'MANUAL', action: 'FILE-ATTACHED', jobId: parseInt(req.params.id), jobTitle: job?.title, company: job?.company, reason: originalname });
   res.json({ filename, originalname, size, filePath });
 });
 
@@ -484,8 +512,18 @@ router.post('/:id/fetch-description', async (req, res) => {
       job.id
     );
 
-  // Auto-score in background — don't block the response
   const freshJob = getDb().prepare('SELECT * FROM jobs WHERE id = ?').get(job.id);
+
+  // Archive immediately if description contains an excluded keyword
+  const { isExcludedByDescription } = require('../services/scraper');
+  const descPlain = description.replace(/<[^>]+>/g, ' ');
+  if (isExcludedByDescription(descPlain, freshJob.job_category)) {
+    getDb().prepare("UPDATE jobs SET status = 'Archived', updated_at = datetime('now') WHERE id = ?").run(job.id);
+    log({ type: 'activity', trigger: 'AUTO', action: 'ARCHIVED', jobId: job.id, jobTitle: job.title, company: job.company, source: job.source, reason: 'Exclude keyword found in description' });
+    return res.json({ archived: true });
+  }
+
+  // Auto-score in background — don't block the response
   scoreFit(description, cvForJob(freshJob)).then(result => {
     const hasDeadline = freshJob.deadline && freshJob.deadline.trim();
     getDb().prepare(`

@@ -25,6 +25,7 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
   const [addingToCol,   setAddingToCol]   = useState(null)
   const [filteringNew,  setFilteringNew]  = useState(false)
   const [filterResult,  setFilterResult]  = useState(null)
+  const [syncing,       setSyncing]       = useState(false)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
   const kcStyle   = settings.card_style || 'edge'
@@ -60,6 +61,12 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
     setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: newStatus } : j))
     try { await api.put(`/jobs/${job.id}/move`, { status: newStatus }) } catch {}
   }, [jobs, setJobs])
+
+  const handleSync = async () => {
+    setSyncing(true)
+    await api.post('/scrape', {}).catch(() => {})
+    setSyncing(false)
+  }
 
   const handleFilterNew = async () => {
     setFilteringNew(true)
@@ -176,9 +183,21 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
           </button>
           <button
             className="btn-ai-filter"
+            onClick={handleSync}
+            disabled={syncing}
+            title="Scrape Seek and Trade Me Jobs for new listings"
+          >
+            {syncing
+              ? <span className="spinner" style={{ width: 13, height: 13, borderColor: 'rgba(255,255,255,.35)', borderTopColor: '#fff' }} />
+              : <Icon name="refresh" size={13} />
+            }
+            Sync sources
+          </button>
+          <button
+            className="btn-ai-filter"
             onClick={handleFilterNew}
             disabled={filteringNew}
-            title="Score unscored New jobs and archive poor fits (below 40)"
+            title="Score new jobs against your CV and archive poor fits"
           >
             {filteringNew
               ? <span className="spinner" style={{ width: 13, height: 13, borderColor: 'rgba(255,255,255,.35)', borderTopColor: '#fff' }} />

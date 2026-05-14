@@ -51,18 +51,18 @@
 }
 
 [data-mode="dark"] {
-  --bg:        #14132A;
-  --bg-2:      #242140;
-  --bg-sunk:   #0E0D1F;
-  --ink:       #F2F1F8;
-  --ink-2:     #C8C5D8;
-  --ink-3:     #9E9BB6;
-  --ink-4:     #6E6B88;
-  --rule:      #302D52;
-  --rule-2:    #3E3B62;
-  --accent:    #7B6FC8;
-  --accent-2:  #9488D4;
-  --accent-soft: #352E60;
+  --bg:        #111C26;
+  --bg-2:      #1A2A38;
+  --bg-sunk:   #0C151E;
+  --ink:       #EEF2F5;
+  --ink-2:     #B8C8D4;
+  --ink-3:     #7A96A8;
+  --ink-4:     #4E6878;
+  --rule:      #1E3040;
+  --rule-2:    #2A3F52;
+  --accent:    #7B8FD4;
+  --accent-2:  #94A6DC;
+  --accent-soft: #1A3050;
   --cyan:      #2DDDDE;
   --cyan-soft: #15393A;
   --good:      #25C272;
@@ -658,7 +658,7 @@ h1,h2,h3,h4  { margin: 0; font-weight: 500; }
 
 /* Job description HTML */
 .job-desc-html { font-size: 15px; line-height: 1.75; color: var(--ink); font-family: var(--font-display); font-weight: 300; }
-.job-desc-html p  { margin: 0 0 0.8em; }
+.job-desc-html p  { margin: 0 0 0.8em; white-space: pre-line; }
 .job-desc-html p:last-child { margin-bottom: 0; }
 .job-desc-html ul { list-style: none; padding-left: 0; margin: 0 0 0.8em 0; }
 .job-desc-html ul > li { position: relative; padding-left: 1em; margin-bottom: 0.35em; }

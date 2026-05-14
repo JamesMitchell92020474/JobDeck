@@ -47,7 +47,7 @@ function enforceFolderCap() {
   } catch {}
 }
 
-function log({ type = 'activity', trigger = 'MANUAL', action, jobTitle, company, source, reason }) {
+function log({ type = 'activity', trigger = 'MANUAL', action, jobId, jobTitle, company, source, reason }) {
   const ts = new Date().toISOString().replace('T', ' ').slice(0, 19);
   const parts = [ts, `[${trigger}]`, `${action}`];
   if (jobTitle) parts.push(`"${jobTitle}"`);
@@ -60,17 +60,18 @@ function log({ type = 'activity', trigger = 'MANUAL', action, jobTitle, company,
 
   try {
     getDb().prepare(`
-      INSERT INTO activity_logs (log_type, trigger_type, action, job_title, company, source, reason)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(type, trigger, action, jobTitle || null, company || null, source || null, reason || null);
+      INSERT INTO activity_logs (log_type, trigger_type, action, job_id, job_title, company, source, reason)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(type, trigger, action, jobId || null, jobTitle || null, company || null, source || null, reason || null);
   } catch {}
 }
 
-function getLogs({ type, trigger, from, to, limit = 200 } = {}) {
+function getLogs({ type, trigger, jobId, from, to, limit = 200 } = {}) {
   let q = 'SELECT * FROM activity_logs WHERE 1=1';
   const params = [];
   if (type)    { q += ' AND log_type = ?';     params.push(type); }
   if (trigger) { q += ' AND trigger_type = ?'; params.push(trigger); }
+  if (jobId)   { q += ' AND job_id = ?';       params.push(jobId); }
   if (from)    { q += ' AND created_at >= ?';  params.push(from); }
   if (to)      { q += ' AND created_at <= ?';  params.push(to); }
   q += ' ORDER BY created_at DESC LIMIT ?';

@@ -37,6 +37,21 @@ async function fetchWeather(city = 'christchurch') {
 
 const router = express.Router();
 
+// In-memory welcome message cache. Keyed on time-of-day bucket + pipeline counts
+// so it only regenerates when something meaningful has changed.
+let welcomeCache = { key: null, message: null };
+
+function timeBucket() {
+  const h = parseInt(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland', hour: 'numeric', hour12: false }));
+  if (h >= 5 && h < 12) return 'morning';
+  if (h >= 12 && h < 18) return 'afternoon';
+  return 'evening';
+}
+
+function welcomeKey(stats) {
+  return `${timeBucket()}|${stats.new}|${stats.interested}|${stats.applied}|${stats.interview}|${stats.offer}|${stats.recentMatches}|${stats.upcomingDeadlines}`;
+}
+
 // GET /api/stats
 router.get('/', (req, res) => {
   const db = getDb();
@@ -107,7 +122,8 @@ router.get('/', (req, res) => {
   res.json({ counts, activity, sources, deadlines, recent, upcoming7 });
 });
 
-// GET /api/welcome
+// GET /api/stats/welcome
+// Cached by time-of-day bucket + pipeline counts. Pass ?refresh=1 to force regeneration.
 router.get('/welcome', async (req, res) => {
   try {
     const db = getDb();
@@ -123,15 +139,22 @@ router.get('/welcome', async (req, res) => {
       "SELECT COUNT(*) as n FROM jobs WHERE deadline IS NOT NULL AND deadline != '' AND is_soft_deleted = 0"
     ).get().n;
 
+    const key = welcomeKey(stats);
+    if (req.query.refresh !== '1' && welcomeCache.key === key && welcomeCache.message) {
+      return res.json({ message: welcomeCache.message, cached: true });
+    }
+
     const name = getSetting('display_name') || '';
     const city = getSetting('scraper_location') || 'Christchurch';
     const weather = await fetchWeather(city);
     let msg = await generateWelcome(stats, name, weather);
     msg = msg.replace(/^(good\s+(morning|afternoon|evening)[,!]?\s*(james[,!]?\s*)?|hi[,!]?\s*(james[,!]?\s*)?|hey[,!]?\s*(james[,!]?\s*)?|hello[,!]?\s*(james[,!]?\s*)?)/i, '').trimStart();
     if (msg.length > 0) msg = msg[0].toUpperCase() + msg.slice(1);
-    res.json({ message: msg });
+
+    welcomeCache = { key, message: msg };
+    res.json({ message: msg, cached: false });
   } catch (e) {
-    res.json({ message: `Welcome back. You have jobs to review today.` });
+    res.json({ message: 'Welcome back. You have jobs to review today.', cached: false });
   }
 });
 

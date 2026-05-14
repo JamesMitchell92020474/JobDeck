@@ -83,7 +83,7 @@ ${cvText}
 Return a JSON object with exactly these fields:
 {
   "fit_score": <integer 0-100>,
-  "summary": "<2-3 sentence match summary>",
+  "summary": "<2-3 sentence match summary, written in second person addressing the user directly — use 'you/your', not the candidate's name or third person>",
   "skills_gaps": ["<gap 1>", "<gap 2>"],
   "deadline": "<closing/application date as written in the ad e.g. '30 May 2025', or null if not mentioned>",
   "description_summary": "<1-2 sentence plain text overview of the role and its key requirements, written independently of the candidate>"

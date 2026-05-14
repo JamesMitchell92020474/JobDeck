@@ -99,6 +99,7 @@ Key schema additions (beyond initial schema):
 - `global_chat.session_id` — links messages to a named session
 - `global_chat_sessions (id, name, created_at)` — named chat sessions, max 20 kept
 - `job_interview_runs (id, job_id, transcript, created_at)` — saved interview transcripts
+- `activity_logs.job_id INTEGER` — links log entries to a specific job for per-card activity view
 
 **Transaction pattern** — `node:sqlite` has no `db.transaction()` wrapper. Use explicit:
 ```js
@@ -135,6 +136,9 @@ catch (e) { db.exec('ROLLBACK'); }
 | `log_path` | Override for log directory (falls back to LOG_PATH env var) |
 | `ai_filter_threshold` | Fit score below which AI filter archives jobs (default: 40) |
 | `log_retention_mb` | Max log folder size in MB before oldest files are deleted (default: 50) |
+| `sync_on_startup` | `1` to scrape all sources automatically when the app opens (default: 0) |
+| `scraper_keywords_exclude_tech` | Comma-separated keywords — jobs whose title OR description contains these are skipped/archived for the tech profile |
+| `scraper_keywords_exclude_hospitality` | Same for the hospitality profile |
 
 ## Design system
 
@@ -158,6 +162,13 @@ Favicon: `src/frontend/favicon.svg` — indigo rounded square with white italic 
 `--src-color` as a CSS custom property; the edge bar and bordered left-border both read it.
 Column header dots still use the column colours (`--col-*`) for status wayfinding.
 Jobs with no recognised source fall back to `var(--ink-4)`.
+
+**Job description HTML** — descriptions are stored as cleaned HTML and rendered with
+`dangerouslySetInnerHTML` in `.job-desc-html`. Cleaning runs in `page.evaluate()` inside
+Playwright and converts block elements to `<p>`, strips UI elements, and converts `\n`
+text-node newlines to `<br>` elements (Trade Me uses literal newlines in `<p>` tags).
+`.job-desc-html p` has `white-space: pre-line` as a fallback for descriptions fetched
+before the `<br>` conversion was added.
 
 Column colours (CSS vars, used on column header dots only):
 - `--col-new`         #6B7FD4 (soft periwinkle)
@@ -192,7 +203,7 @@ top of the Overview tab. Not shown in the sidebar.
 
 API key loaded from `ANTHROPIC_API_KEY` env var, falls back to `api_key` DB setting.
 
-`scoreFit()` returns: `{ fit_score, summary, skills_gaps, deadline, description_summary }` — all extracted in one call. `description_summary` is a 1-2 sentence plain-text overview of the role, stored on the job and used in global chat context to reduce token usage. Saved to `jobs.description_summary` by all four score-save sites (ai-score route, fetch-description background, filter-new route, scraper).
+`scoreFit()` returns: `{ fit_score, summary, skills_gaps, deadline, description_summary }` — all extracted in one call. `summary` is written in second person ("you/your"). `description_summary` is a 1-2 sentence plain-text overview of the role, stored on the job and used in global chat context to reduce token usage. Saved to `jobs.description_summary` by all four score-save sites (ai-score route, fetch-description background, filter-new route, scraper).
 
 `interviewChat(messages, job, cvText)` — mock interview mode for per-card chat. Claude plays a professional interviewer: opens with "tell me about yourself", asks 12–15 questions (behavioural/STAR, technical, situational), may ask 1 follow-up per answer, gives no mid-interview feedback, closes professionally, then delivers a written assessment covering strengths, areas to improve, and a communication style section (uses per-answer metadata: duration, word count, filler words). Uses separate message history (`mode = 'interview'` on `job_chat` rows). Transcripts saved to `job_interview_runs` table.
 
@@ -220,7 +231,7 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | GET | /api/stats | Dashboard counts, activity (NZ timezone), sources |
 | GET | /api/stats/welcome | AI-generated welcome message |
 | GET/POST | /api/jobs | List / create jobs |
-| POST | /api/jobs/filter-new | Score unscored New jobs and archive poor fits (reads `ai_filter_threshold` setting) |
+| POST | /api/jobs/filter-new | Score all unscored active jobs; archive New jobs below threshold (reads `ai_filter_threshold`) |
 | GET/PUT/DELETE | /api/jobs/:id | Single job CRUD |
 | PUT | /api/jobs/:id/move | Move to kanban column |
 | POST | /api/jobs/:id/ai-score | Score job against CV |
@@ -252,6 +263,8 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | GET | /api/logs | Activity log viewer |
 | POST | /api/export/backup | Create zip backup (reads `backup_path` setting) |
 | GET/PUT | /api/export/cover-letter-template | Cover letter template |
+| GET | /api/jobs/:id/activity | Per-job activity log entries (from `activity_logs` filtered by `job_id`) |
+| DELETE | /api/jobs/:id/chat | Clear in-progress chat messages for a mode (`?mode=interview`) without saving |
 
 ## Chat features
 
@@ -277,11 +290,13 @@ The frontend fetches `GET /api/jobs/:id/chat-context` once on card open and pass
 Shared hook used by both `Chat.jsx` and `ChatTab.jsx`.
 
 - **Voice mode toggle** — clicking the mic button once enters continuous voice mode (mic auto-restarts after every response). Clicking again exits.
-- **Auto-restart logic**: a `useEffect([messages])` fires after each assistant message and restarts the mic 200ms later. If recognition times out naturally (no speech detected, `cancelRef` is still false), `onNaturalEnd` callback restarts immediately.
-- **Interrupt TTS**: mic starts 200ms after response regardless of whether TTS is still playing. Speaking immediately calls `stopSpeaking()` to cancel TTS.
-- **TTS text cleaning**: markdown stripped before synthesis (headings, bold, italic, code ticks, non-standard chars).
-- `speak(text, onNaturalEnd?)` — `onNaturalEnd` fires only on natural `onend` (not when `stopListening()` was called).
-- `startListening(onTranscript, onNaturalEnd?)` — `cancelRef` distinguishes user-cancelled from natural timeout.
+- **Auto-enable on interview** — entering mock interview mode auto-enables both voice and TTS (if supported). Exiting turns voice off.
+- **Auto-restart logic**: a `useEffect([messages])` fires after each assistant message and restarts the mic 200ms later. `no-speech` error (silence timeout) is treated as natural end so the restart loop continues — only real errors (permission denied etc.) stop the loop.
+- **Extended listening** — in interview mode, `startListening` uses `{ pauseBeforeSend: 2500 }`: continuous recognition, submits only after 2.5 seconds of silence, preventing premature sends mid-thought.
+- **TTS pauses**: `speak()` splits text on paragraph/bullet breaks and speaks each chunk as a separate `SpeechSynthesisUtterance` with a 350ms gap. Uses a `ttsChainRef` Symbol for clean cancellation.
+- **TTS text cleaning**: markdown stripped, `\n` preserved for paragraph splitting.
+- `startListening(onTranscript, onNaturalEnd?, options?)` — `options.pauseBeforeSend` (ms) enables continuous mode with silence-based submission.
+- `cancelRef` distinguishes user-cancelled from natural timeout; `ttsChainRef` cancels queued TTS utterances.
 
 ## Kanban columns
 
@@ -296,8 +311,8 @@ Order: New → Interested → Applied → Interview → Offer → Rejected → A
 ### AI filter
 
 "Filter with AI" button appears in both the kanban toolbar and the dashboard quick-actions row. Calls `POST /api/jobs/filter-new`:
-1. Scores any unscored New jobs that have a fetched description
-2. Archives all New jobs with `fit_score < ai_filter_threshold` (default 40, configurable in Settings → AI)
+1. Scores ANY unscored job with a description that isn't Archived/Rejected (not just New) — so jobs moved out of New before scoring still get scored
+2. Archives scored jobs that are still in `New` with `fit_score < ai_filter_threshold` (default 40) — jobs already moved elsewhere are left in place
 3. Kicks off background Playwright fetch for any New jobs missing descriptions — scores and auto-archives them when done
 4. Returns `{ archived, kept, scored, fetching }` — shown as an inline result note next to the button
 
@@ -339,7 +354,8 @@ via `abbr = s => /^[A-Za-z]+$/.test(s) ? s.slice(0, 3) : s` applied to each part
 Playwright scrapers in `src/backend/services/scraper.js`.
 Run `npx playwright install chromium` before using.
 LinkedIn: manual add only (no scraping). Jora and Indeed removed — low NZ value/overlap.
-Cron schedule: `src/backend/cron.js` — daily scrape 7:00 NZST, housekeeping 2:00 NZST.
+Cron schedule: `src/backend/cron.js` — housekeeping 2:00 NZST (daily scrape removed; use Sync button or enable `sync_on_startup` in Settings).
+`maybeStartupSync()` in `startup.js` — called after DB init; runs `runScrape()` in background if `sync_on_startup = '1'`.
 
 Scraper reads `scraper_location`, `scraper_keywords_tech`, `scraper_keywords_hospitality`, `scraper_max_age_days` from settings to build search URLs. Seek uses `daterange` param for age filtering. Saves `last_sync_{source}` setting on completion.
 

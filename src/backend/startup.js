@@ -42,4 +42,13 @@ function runStartup() {
   console.log('[startup] Startup complete');
 }
 
-module.exports = { runStartup };
+function maybeStartupSync() {
+  const { getSetting } = require('./db/database');
+  const { log } = require('./services/logger');
+  if (getSetting('sync_on_startup') !== '1') return;
+  console.log('[startup] Sync on startup enabled — running scrape in background');
+  log({ type: 'scraper', trigger: 'AUTO', action: 'STARTUP-SCRAPE-STARTED' });
+  require('./services/scraper').runScrape().catch(() => {});
+}
+
+module.exports = { runStartup, maybeStartupSync };

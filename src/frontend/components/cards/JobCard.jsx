@@ -86,7 +86,7 @@ export default function JobCard({ job, kcStyle, srcColors, onClick, isDragging }
           </Pill>
         )}
         {job.source && (
-          <Pill style={srcColor ? { borderColor: srcColor, color: srcColor, background: `${srcColor}18` } : {}}>
+          <Pill style={srcColor ? { borderColor: srcColor, color: srcColor, background: `${srcColor}2E` } : {}}>
             {job.source}
           </Pill>
         )}
@@ -101,7 +101,7 @@ export default function JobCard({ job, kcStyle, srcColors, onClick, isDragging }
       <div className="kc-meta">
         <span className="kc-source">{job.job_type || ''}</span>
         <span className="kc-date">
-          {job.posting_date ? `Posted ${job.posting_date}` : relativeDate(job.created_at)}
+          {job.posting_date ? (/^\d/.test(job.posting_date) ? `Posted ${job.posting_date}` : job.posting_date) : relativeDate(job.created_at)}
         </span>
       </div>
     </div>

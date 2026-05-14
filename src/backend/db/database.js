@@ -98,6 +98,7 @@ function getDb() {
   try { db.exec("ALTER TABLE job_chat ADD COLUMN mode TEXT NOT NULL DEFAULT 'chat'") } catch {}
   try { db.exec('ALTER TABLE job_chat ADD COLUMN answer_meta TEXT') } catch {}
   try { db.exec('ALTER TABLE jobs ADD COLUMN description_summary TEXT') } catch {}
+  try { db.exec('ALTER TABLE activity_logs ADD COLUMN job_id INTEGER') } catch {}
 
   // One-time migration: move all existing global chat messages into a single
   // named session, so they're not orphaned when the sessions feature is added.
@@ -114,6 +115,14 @@ function getDb() {
       db.prepare('UPDATE global_chat SET session_id = ?').run(r.lastInsertRowid);
     }
     db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('migrated_chat_sessions_v1', '1');
+  }
+
+  // One-time migration: blank out posting_date values that were stored as raw
+  // unparsed text (e.g. "Listed yesterday") — cards fall back to relative date.
+  const postingDateCleaned = db.prepare("SELECT value FROM settings WHERE key = 'migrated_posting_date_v1'").get();
+  if (!postingDateCleaned) {
+    db.exec("UPDATE jobs SET posting_date = NULL WHERE posting_date IS NOT NULL AND posting_date NOT GLOB '[0-9]*'");
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('migrated_posting_date_v1', '1');
   }
 
   // ─── Default settings ──────────────────────────────────────────────────────
@@ -138,6 +147,7 @@ function getDb() {
     low_disk_gb:    process.env.LOW_DISK_WARNING_GB || '2',
     api_key:        '',
     deep_analysis:  '0',
+    sync_on_startup: '0',
   };
 
   // Insert all defaults in a single transaction for efficiency.

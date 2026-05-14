@@ -87,7 +87,8 @@ export default function ChatTab({ job, onCountChange }) {
     if (!voiceRef.current) return
     startListening(
       (...args) => callbackRef.current?.(...args),
-      () => { if (voiceRef.current) setTimeout(startVoice, 100) }
+      () => { if (voiceRef.current) setTimeout(startVoice, 100) },
+      interviewMode ? { pauseBeforeSend: 2500 } : {}
     )
   }
 
@@ -198,9 +199,29 @@ export default function ChatTab({ job, onCountChange }) {
 
   const toggleInterview = () => {
     stopListening()
+    const entering = !interviewMode
     setInterviewMode(v => !v)
     setDraft('')
     questionTimestamp.current = null
+    if (entering && supported) {
+      voiceRef.current = true
+      setVoiceMode(true)
+      setTtsEnabled(true)
+    } else if (!entering) {
+      voiceRef.current = false
+      setVoiceMode(false)
+    }
+  }
+
+  const restartInterview = async () => {
+    if (!confirm('Restart the interview? Current progress will be lost.')) return
+    stopListening()
+    stopSpeaking()
+    setMessages([])
+    setDraft('')
+    questionTimestamp.current = null
+    await api.delete(`/jobs/${job.id}/chat?mode=interview`).catch(() => {})
+    await beginInterview()
   }
 
   const saveInterview = async () => {
@@ -245,14 +266,23 @@ export default function ChatTab({ job, onCountChange }) {
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {interviewMode && messages.some(m => m.role === 'user') && (
-            <button
-              className="btn btn-sm btn-ghost"
-              onClick={saveInterview}
-              disabled={saving}
-              title="Save this interview transcript and clear for a new session"
-            >
-              {saving ? 'Saving…' : 'Save Interview'}
-            </button>
+            <>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={restartInterview}
+                title="Discard current progress and start a fresh interview"
+              >
+                <Icon name="refresh" size={11} /> Restart
+              </button>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={saveInterview}
+                disabled={saving}
+                title="Save this interview transcript and clear for a new session"
+              >
+                {saving ? 'Saving…' : 'Save Interview'}
+              </button>
+            </>
           )}
           <button
             className="btn btn-sm"

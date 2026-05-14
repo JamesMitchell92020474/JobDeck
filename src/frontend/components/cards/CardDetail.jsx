@@ -100,10 +100,7 @@ export default function CardDetail({ jobId, setRoute }) {
           <div style={{ gridColumn: '1/-1' }}><div className="k">Salary</div><div className="v">{job.salary || '—'}</div></div>
           <div style={{ gridColumn: '1/-1' }}>
             <div className="k">Category</div>
-            <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>
-                {job.job_category === 'tech' ? (settings.cv_label_1 || 'CV Profile 1') : job.job_category === 'hospitality' ? (settings.cv_label_2 || 'CV Profile 2') : 'General'}
-              </span>
+            <div className="v">
               <select
                 className="input"
                 style={{ fontSize: 11, padding: '2px 6px', height: 'auto', width: 'auto' }}

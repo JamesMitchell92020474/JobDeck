@@ -120,7 +120,7 @@ export default function FilesTab({ job, onCountChange, onFilesChange }) {
               <a href={serveUrl(selected, true)} download className="btn btn-ghost btn-sm">
                 <Icon name="download" size={11} /> Download
               </a>
-              <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>
+              <button className="btn btn-ghost btn-sm" title="Close preview" onClick={() => setSelected(null)}>
                 <Icon name="x" size={11} />
               </button>
             </div>

@@ -26,11 +26,30 @@ async function fetchDescriptionPage(context, url) {
           a.textContent = decodeURIComponent(a.href.replace('mailto:', '').split('?')[0].trim()) || a.textContent;
         });
         el.querySelectorAll('script,style,button,input,select,form,svg,img,[class*="apply"],[class*="button"],[class*="social"],[class*="share"]').forEach(n => n.remove());
-        const BLOCK_TAGS = new Set(['div','section','article','header','footer','aside','main','figure','figcaption']);
-        el.querySelectorAll([...BLOCK_TAGS].join(',')).forEach(node => {
-          const p = document.createElement('p');
-          while (node.firstChild) p.appendChild(node.firstChild);
-          node.parentNode?.replaceChild(p, node);
+        // Remove UI-pattern links (copy, share, report, print, etc.)
+        el.querySelectorAll('a').forEach(a => {
+          const t = a.textContent.trim().toLowerCase();
+          if (/^(copy|share|print|report|apply|save|bookmark|email)\b/.test(t)) a.remove();
+        });
+        const BLOCK_TAGS = new Set(['div','section','article','header','footer','aside','main','figure','figcaption','dl','dt','dd','tr','td','th','caption','thead','tbody','tfoot']);
+        // Process deepest blocks first to avoid nesting issues.
+        // Containers that already hold block children get unwrapped (tag removed, children kept);
+        // leaf blocks (text/inline only) get converted to <p>.
+        const blocks = [...el.querySelectorAll([...BLOCK_TAGS].join(','))].reverse();
+        blocks.forEach(node => {
+          if (!node.parentNode) return;
+          const hasBlockChild = [...node.children].some(c => {
+            const t = c.tagName.toLowerCase();
+            return t === 'p' || BLOCK_TAGS.has(t);
+          });
+          if (hasBlockChild) {
+            while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
+            node.parentNode.removeChild(node);
+          } else {
+            const p = document.createElement('p');
+            while (node.firstChild) p.appendChild(node.firstChild);
+            node.parentNode.replaceChild(p, node);
+          }
         });
         const unwrap = node => {
           if (node.nodeType === 1 && !KEEP_TAGS.has(node.tagName.toLowerCase())) {
@@ -47,11 +66,56 @@ async function fetchDescriptionPage(context, url) {
             if (!(n.tagName === 'A' && attr.name === 'href')) n.removeAttribute(attr.name);
           });
         });
+        // Wrap orphan inline content (bare text nodes, <a> tags, etc.) that sit
+        // directly in the container between block elements into <p> tags.
+        const BLOCK_NODES = new Set(['P','UL','OL','H1','H2','H3','H4']);
+        const children = [...el.childNodes];
+        let pending = [];
+        const flush = (insertBefore) => {
+          if (!pending.length) return;
+          const hasText = pending.some(n =>
+            (n.nodeType === 3 && n.textContent.trim()) ||
+            (n.nodeType === 1 && n.textContent.trim())
+          );
+          if (hasText) {
+            const p = document.createElement('p');
+            pending.forEach(n => p.appendChild(n));
+            el.insertBefore(p, insertBefore);
+          } else {
+            pending.forEach(n => { if (n.parentNode) n.parentNode.removeChild(n); });
+          }
+          pending = [];
+        };
+        for (const n of children) {
+          if (n.nodeType === 1 && BLOCK_NODES.has(n.tagName)) {
+            flush(n);
+          } else {
+            pending.push(n);
+          }
+        }
+        flush(null);
+
         let empties = 0;
         [...el.querySelectorAll('p')].forEach(p => {
           if (!p.textContent.trim()) { empties++; if (empties > 1) p.remove(); }
           else empties = 0;
         });
+        // Convert newlines in text nodes to <br> elements so browsers render them
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        const textNodes = [];
+        let tn;
+        while ((tn = walker.nextNode())) textNodes.push(tn);
+        textNodes.forEach(t => {
+          if (!t.textContent.includes('\n')) return;
+          const parts = t.textContent.split('\n');
+          const frag = document.createDocumentFragment();
+          parts.forEach((part, i) => {
+            if (i > 0) frag.appendChild(document.createElement('br'));
+            if (part) frag.appendChild(document.createTextNode(part));
+          });
+          t.parentNode.replaceChild(frag, t);
+        });
+
         return el.innerHTML.trim();
       }
 

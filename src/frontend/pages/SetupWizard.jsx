@@ -197,7 +197,7 @@ function StepRestarting() {
   )
 }
 
-export default function SetupWizard({ defaults }) {
+export default function SetupWizard({ defaults, onDismiss }) {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({
     dataPath:    defaults.dataPath,
@@ -254,10 +254,13 @@ export default function SetupWizard({ defaults }) {
           }}>
             JD
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>JobDeck</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 1 }}>First-time setup</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 1 }}>{onDismiss ? 'Setup wizard preview' : 'First-time setup'}</div>
           </div>
+          {onDismiss && (
+            <button onClick={onDismiss} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 22, lineHeight: 1, padding: 4 }} title="Close preview">×</button>
+          )}
         </div>
 
         {/* Content */}

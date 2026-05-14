@@ -8,16 +8,17 @@ AI-powered job search dashboard for Windows. Scrapes Seek and Trade Me Jobs, sco
 
 **Pipeline**
 - Kanban board — New → Interested → Applied → Interview → Offer → Rejected → Archived
-- AI fit scoring (0–100) against your CV with summary and skills gaps
-- One-click AI filter — scores all new listings, archives poor fits automatically (configurable threshold)
-- Playwright scraper for Seek and Trade Me Jobs (daily schedule + manual trigger)
+- AI fit scoring (0–100) against your CV with second-person summary and skills gaps
+- One-click AI filter — scores all unscored active jobs, archives poor fits from the New column (configurable threshold)
+- Playwright scraper for Seek and Trade Me Jobs (manual sync or optional startup auto-sync)
 - Full description fetch per job — extracts salary, job type, and posting date
+- Exclude keywords per CV profile — jobs matching excluded terms in title or description are silently skipped
 
 **AI chat**
 - Global chat with named session history — discuss your whole job search with Claude
 - Per-job chat — Claude has the job description and your CV as context
 - Voice mode — hands-free conversation; mic restarts automatically after each response
-- Mock interview — 15 realistic questions, no mid-interview feedback, written assessment at the end; save and compare transcripts across sessions
+- Mock interview — voice and TTS auto-enable on entry; 15 realistic questions with 2.5 second pause before sending to allow thinking time; written assessment at the end; save, restart, and compare transcripts across sessions
 
 **Documents**
 - AI cover letter generation with a custom style template
@@ -25,7 +26,8 @@ AI-powered job search dashboard for Windows. Scrapes Seek and Trade Me Jobs, sco
 - Two CV profiles with configurable labels (e.g. "Tech / IT" and "Retail / Hospitality")
 
 **Other**
-- Dashboard with welcome message, pipeline stats, news feed, and weather
+- Dashboard with cached welcome message (regenerates on pipeline changes or time-of-day shift), stats, news feed, and weather
+- Per-job activity log — tracks status changes, AI scoring, cover letters, file attachments
 - Activity logs, zip backups, dark mode, accent colour customisation
 - All personal details configured via the setup wizard and Settings — no hardcoding in the code
 
@@ -90,7 +92,7 @@ Go to **Settings → Profile & CV** and upload PDF versions of your CVs. You can
 
 ## Daily use
 
-- **Double-click `JobDeck.bat`** to start the app each day. Close the server window to stop it.
+- **Double-click `JobDeck.bat`** (or the desktop shortcut if you created one) to start the app each day. Close the server window to stop it.
 - **Sync Sources** (dashboard) — scrapes Seek and Trade Me for new listings matching your keywords
 - **Filter with AI** — scores all new listings and archives anything below the configured fit threshold
 - **Job cards** — click any job to see the full description, chat with Claude about it, or start a mock interview

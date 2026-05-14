@@ -3,7 +3,7 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env'
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { runStartup } = require('./startup');
+const { runStartup, maybeStartupSync } = require('./startup');
 const { getDb } = require('./db/database');
 
 const app = express();
@@ -51,6 +51,9 @@ try { runStartup(); } catch (e) { console.error('[startup] Error:', e.message); 
 
 // Initialise DB eagerly
 try { getDb(); } catch (e) { console.error('[db] Init error:', e.message); }
+
+// Run startup sync if the user has opted in (non-blocking)
+try { maybeStartupSync(); } catch (e) { console.error('[startup] Sync error:', e.message); }
 
 const server = app.listen(PORT, () => {
   console.log(`[backend] JobDeck API running on http://localhost:${PORT}`);

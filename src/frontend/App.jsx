@@ -67,10 +67,20 @@ export default function App() {
       .then(r => r.json())
       .then(d => setSetup(d))
       .catch(() => setSetup({ needed: false }))
+
+    const handler = () => {
+      fetch('/api/setup/status')
+        .then(r => r.json())
+        .then(d => setSetup({ ...d, needed: false, forced: true }))
+        .catch(() => {})
+    }
+    window.addEventListener('preview-wizard', handler)
+    return () => window.removeEventListener('preview-wizard', handler)
   }, [])
 
   if (setup === null) return null // brief check, no flash
   if (setup.needed) return <SetupWizard defaults={setup.defaults} />
+  if (setup.forced) return <SetupWizard defaults={setup.defaults} onDismiss={() => setSetup(s => ({ ...s, forced: false }))} />
 
   return (
     <AppProvider>
