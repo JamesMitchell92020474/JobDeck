@@ -89,8 +89,8 @@ Click **Finish setup** and the app restarts automatically. You're ready to go.
 Go to **Settings** and complete the following before syncing for the first time:
 
 **Profile & CV** (Settings → Profile & CV)
-- Name your two CV profiles to match your job search types (e.g. "Tech / IT" and "Retail / Hospitality") — a second profile is optional if you're only searching in one area
-- Upload a PDF CV for each profile — JobDeck uses these to score job listings against your experience
+- Name your CV profile to match your job search type (e.g. "Tech / IT") — a second CV and profile is optional if you want to search across more than one industry (e.g. "Retail / Hospitality")
+- Upload a PDF CV for each profile you set up — JobDeck uses these to score job listings against your experience
 
 **Search keywords** (Settings → Scraper preferences)
 
