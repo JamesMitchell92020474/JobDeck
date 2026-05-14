@@ -184,8 +184,8 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
           <button
             className="btn-ai-filter"
             onClick={handleSync}
-            disabled={syncing}
-            title="Scrape Seek and Trade Me Jobs for new listings"
+            disabled={syncing || !settings.scraper_keywords_tech?.trim()}
+            title={settings.scraper_keywords_tech?.trim() ? 'Scrape Seek and Trade Me Jobs for new listings' : 'Add keywords in Settings → Scraper preferences before syncing'}
           >
             {syncing
               ? <span className="spinner" style={{ width: 13, height: 13, borderColor: 'rgba(255,255,255,.35)', borderTopColor: '#fff' }} />
@@ -196,7 +196,7 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
           <button
             className="btn-ai-filter"
             onClick={handleFilterNew}
-            disabled={filteringNew}
+            disabled={filteringNew || jobs.filter(j => !j.is_soft_deleted).length === 0}
             title="Score new jobs against your CV and archive poor fits"
           >
             {filteringNew

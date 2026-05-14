@@ -68,7 +68,11 @@ needed (no DB at current DATA_PATH and `SETUP_COMPLETE !== 'true'`), it renders 
 wizard instead of the main app — no DB is initialised during setup.
 
 **Step 1 — Storage paths**: DATA_PATH, BACKUP_PATH, LOG_PATH (defaults to homedir).
-**Step 2 — Profile**: display name, location, API key, optional desktop shortcut.
+**Step 2 — Profile**: display name, location, CV profile labels (cv_label_1/2), API key, optional desktop shortcut.
+**Step 3 — Keywords**: scraper_keywords_tech and scraper_keywords_hospitality — saved via `PUT /api/settings` after restart.
+**Step 4 — CV upload**: optional, runs post-restart against the live `/api/cv/upload` endpoint. Only shown for profiles that were named.
+
+Sync sources button is disabled (with inline note) until `scraper_keywords_tech` is set. Filter with AI button is disabled when the board has no active jobs.
 
 On submit: `POST /api/setup/complete` writes `.env`, creates a desktop `.lnk` shortcut
 (via PowerShell WScript.Shell) if requested, spawns a fresh Node process with clean env,

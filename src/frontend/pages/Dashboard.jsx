@@ -200,16 +200,24 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
 
       {/* Quick actions */}
       <div className="dash-actions">
-        <button className="btn-ai-filter" onClick={handleSync} disabled={syncing} title="Scrape Seek and Trade Me Jobs for new listings">
+        <button
+          className="btn-ai-filter"
+          onClick={handleSync}
+          disabled={syncing || !settings.scraper_keywords_tech?.trim()}
+          title={settings.scraper_keywords_tech?.trim() ? 'Scrape Seek and Trade Me Jobs for new listings' : 'Add keywords in Settings → Scraper preferences before syncing'}
+        >
           {syncing
             ? <span className="spinner" style={{ width: 11, height: 11, borderColor: 'rgba(255,255,255,.35)', borderTopColor: '#fff' }} />
             : <Icon name="refresh" size={13} />}
           {syncing ? 'Syncing…' : 'Sync sources'}
         </button>
-        {syncResult != null && (
+        {!settings.scraper_keywords_tech?.trim() && (
+          <span className="dash-action-note" style={{ color: 'var(--col-rejected)' }}>Add keywords in Settings first</span>
+        )}
+        {syncResult != null && settings.scraper_keywords_tech?.trim() && (
           <span className="dash-action-note">{syncResult > 0 ? `+${syncResult} new` : 'Up to date'}</span>
         )}
-        <button className="btn-ai-filter dash-ai-btn" onClick={handleFilter} disabled={filtering} title="Score new jobs against your CV and archive poor fits">
+        <button className="btn-ai-filter dash-ai-btn" onClick={handleFilter} disabled={filtering || jobs.filter(j => !j.is_soft_deleted).length === 0} title="Score new jobs against your CV and archive poor fits">
           {filtering
             ? <span className="spinner" style={{ width: 11, height: 11, borderColor: 'rgba(255,255,255,.35)', borderTopColor: '#fff' }} />
             : <Icon name="wand" size={12} />}
