@@ -21,14 +21,16 @@ router.post('/cleanup-unmatched', (req, res) => {
   const hospKw  = getSetting('scraper_keywords_hospitality') || '';
   const location = (getSetting('scraper_location') || 'Christchurch').toLowerCase().trim();
 
-  const keywords = [...new Set(
-    (techKw + ',' + hospKw).split(',').map(k => k.trim().toLowerCase()).filter(Boolean)
-  )];
+  const toTerms = raw => raw.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+  const keywords       = [...new Set(toTerms(techKw + ',' + hospKw))];
+  const excludeTech    = toTerms(getSetting('scraper_keywords_exclude_tech') || '');
+  const excludeHosp    = toTerms(getSetting('scraper_keywords_exclude_hospitality') || '');
 
   const db = getDb();
   const jobs = db.prepare(`
-    SELECT id, title, company, location, source FROM jobs
+    SELECT id, title, company, location, source, job_category, description FROM jobs
     WHERE is_soft_deleted = 0 AND source IS NOT NULL AND source != 'Manual'
+      AND status = 'New'
   `).all();
 
   const toRemove = jobs.filter(j => {
@@ -36,7 +38,16 @@ router.post('/cleanup-unmatched', (req, res) => {
     const loc   = (j.location || '').toLowerCase();
     const matchesKeyword  = keywords.some(k => title.includes(k));
     const matchesLocation = !loc || loc.includes(location);
-    return !matchesKeyword || !matchesLocation;
+    if (!matchesKeyword || !matchesLocation) return true;
+
+    // Also remove if title or description contains an excluded keyword for this category
+    const excludes = j.job_category === 'tech' ? excludeTech
+                   : j.job_category === 'hospitality' ? excludeHosp : [];
+    if (excludes.length) {
+      const descText = (j.description || '').replace(/<[^>]+>/g, ' ').toLowerCase();
+      if (excludes.some(k => title.includes(k) || descText.includes(k))) return true;
+    }
+    return false;
   });
 
   if (!dryRun) {

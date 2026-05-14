@@ -141,9 +141,9 @@ function getDb() {
     density:         'balanced',
     source_colors:   JSON.stringify({ Seek: '#FFC107', 'Trade Me Jobs': '#DC3545' }),
     disabled_sources: JSON.stringify({}),
-    hk_age_days:    '30',          // housekeeping: archive jobs older than this many days
-    hk_soft_days:   '90',          // housekeeping: soft-delete archived jobs after this many days
-    hk_hard_days:   '14',          // housekeeping: hard-delete soft-deleted jobs after this
+    hk_age_days:    '21',          // housekeeping: archive jobs older than this many days
+    hk_soft_days:   '14',          // housekeeping: soft-delete archived jobs after this many days
+    hk_hard_days:   '7',           // housekeeping: hard-delete soft-deleted jobs after this
     low_disk_gb:    process.env.LOW_DISK_WARNING_GB || '2',
     api_key:        '',
     deep_analysis:  '0',

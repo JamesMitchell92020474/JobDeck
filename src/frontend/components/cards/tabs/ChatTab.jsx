@@ -50,6 +50,7 @@ export default function ChatTab({ job, onCountChange }) {
   const [runs,          setRuns]          = useState([])
   const [expandedRun,   setExpandedRun]   = useState(null)
   const [saving,        setSaving]        = useState(false)
+  const [deep,          setDeep]          = useState(false)
   const hasSavedRunsRef = useRef(false)  // prevents auto-begin after a save
 
   const bottomRef          = useRef(null)
@@ -87,28 +88,57 @@ export default function ChatTab({ job, onCountChange }) {
     if (!voiceRef.current) return
     startListening(
       (...args) => callbackRef.current?.(...args),
-      () => { if (voiceRef.current) setTimeout(startVoice, 100) },
+      // Only auto-restart on natural end in interview mode; in regular chat, one shot per press
+      interviewMode ? () => { if (voiceRef.current) setTimeout(startVoice, 100) } : null,
       interviewMode ? { pauseBeforeSend: 2500 } : {}
     )
   }
 
-  // Auto-restart mic after each assistant message while voice mode is on
+  // TTS + mic restart — handles both reading responses aloud and restarting the mic
   useEffect(() => {
-    if (!voiceRef.current) return
+    if (messages.length <= prevCountRef.current) return
     const last = messages[messages.length - 1]
     if (!last || last.role !== 'assistant') return
-    const t = setTimeout(startVoice, 200)
-    return () => clearTimeout(t)
+
+    if (interviewMode) questionTimestamp.current = Date.now()
+
+    const inInterviewVoice = interviewMode && voiceRef.current
+
+    // Treat long responses as the final assessment — stop voice mode after reading
+    const isAssessment = inInterviewVoice && last.content.length > 500
+
+    if (inInterviewVoice && !isAssessment) {
+      // Start mic when TTS finishes (prevents mic picking up TTS audio).
+      // If TTS is off, fall back to a short delay.
+      speak(last.content, () => { if (voiceRef.current) setTimeout(startVoice, 300) })
+      if (!ttsEnabled) {
+        const t = setTimeout(startVoice, 200)
+        return () => clearTimeout(t)
+      }
+    } else {
+      speak(last.content)
+      if (isAssessment) {
+        voiceRef.current = false
+        setVoiceMode(false)
+        stopListening()
+      }
+    }
+    prevCountRef.current = messages.length
   }, [messages]) // eslint-disable-line
 
   const sendText = async (text) => {
     if (!text.trim() || loading) return
     stopListening()
+    // In regular chat, voice is one-shot — turn it off after each send
+    if (!interviewMode && voiceRef.current) {
+      voiceRef.current = false
+      setVoiceMode(false)
+    }
     const answerMeta = buildAnswerMeta(text)
     setLoading(true); setError('')
     setMessages(prev => [...prev, { role: 'user', content: text, id: Date.now() }])
     try {
-      const res = await api.post(`/jobs/${job.id}/chat`, { content: text, mode, cvText, answerMeta })
+      const res = await api.post(`/jobs/${job.id}/chat`, { content: text, mode, cvText, answerMeta, deep: mode === 'chat' && deep })
       setMessages(prev => [...prev, res])
       if (mode === 'chat') onCountChange?.(messages.length + 2)
     } catch (e) {
@@ -147,18 +177,6 @@ export default function ChatTab({ job, onCountChange }) {
   }, [job.id, mode]) // eslint-disable-line
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
-
-  // TTS + start answer timer when a new question arrives
-  useEffect(() => {
-    if (messages.length > prevCountRef.current) {
-      const last = messages[messages.length - 1]
-      if (last?.role === 'assistant') {
-        speak(last.content)
-        if (interviewMode) questionTimestamp.current = Date.now()
-      }
-    }
-    prevCountRef.current = messages.length
-  }, [messages]) // eslint-disable-line
 
   const send = () => {
     if (!draft.trim() || loading) return
@@ -387,20 +405,32 @@ export default function ChatTab({ job, onCountChange }) {
         <textarea
           className="chat-input"
           placeholder={
-            listening   ? 'Listening…'
-            : voiceMode ? 'Voice mode — speak at any time…'
-            : interviewMode ? 'Type or speak your answer…'
+            listening                    ? 'Listening…'
+            : interviewMode && voiceMode ? 'Voice mode — speak your answer…'
+            : interviewMode              ? 'Type or speak your answer…'
             : `Ask Claude about ${job.company}…`
           }
           value={draft}
           onChange={e => setDraft(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send() }}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
           rows={2}
         />
         <div className="chat-foot">
-          <span className="hints" style={{ fontSize: 13 }}>
-            {interviewMode ? '⌘↵ to send · interview mode' : '⌘↵ to send · context: JD + your CV'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="hints" style={{ fontSize: 13 }}>
+              {interviewMode ? 'interview mode' : 'context: JD + your CV'}
+            </span>
+            {!interviewMode && settings.deep_analysis === '1' && (
+              <button
+                className={`btn btn-ghost btn-sm${deep ? ' active' : ''}`}
+                onClick={() => setDeep(d => !d)}
+                title={deep ? 'Switch to Sonnet (faster)' : 'Switch to Opus (deeper analysis)'}
+                style={deep ? { color: 'var(--accent)', fontSize: 11 } : { fontSize: 11, opacity: 0.5 }}
+              >
+                Opus
+              </button>
+            )}
+          </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             {supported && (
               <>
@@ -421,7 +451,16 @@ export default function ChatTab({ job, onCountChange }) {
             )}
             <button
               className={`btn btn-ghost btn-sm${ttsEnabled ? ' active' : ''}`}
-              onClick={() => setTtsEnabled(v => !v)}
+              onClick={() => {
+                if (ttsEnabled && voiceRef.current) {
+                  // Turning off audio while voice is active — stop the whole voice experience
+                  voiceRef.current = false
+                  setVoiceMode(false)
+                  stopListening()
+                  stopSpeaking()
+                }
+                setTtsEnabled(v => !v)
+              }}
               title={ttsEnabled ? 'Mute responses' : 'Read responses aloud'}
               style={ttsEnabled ? { color: 'var(--accent)' } : {}}
             >

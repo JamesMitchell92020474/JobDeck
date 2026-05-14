@@ -345,6 +345,7 @@ export default function Settings() {
             placeholder="Add keyword to exclude…"
           />
         </div>
+        {settings.cv_filename_hospitality && (<>
         <div className="set-row">
           <div className="lbl">{settings.cv_label_2 || 'CV Profile 2'} keywords<small>Type a keyword and press Enter or comma to add · Backspace removes the last</small></div>
           <TagInput
@@ -360,6 +361,7 @@ export default function Settings() {
             placeholder="Add keyword to exclude…"
           />
         </div>
+        </>)}
         <div className="set-row">
           <div className="lbl">Clean up board<small>Remove scraped jobs that don't match your keywords or location</small></div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -395,7 +397,7 @@ export default function Settings() {
                     await api.post('/housekeeping/cleanup-unmatched', { dryRun: false }).catch(() => null)
                     setCleanupPreview(null)
                     setCleanupRunning(false)
-                    await loadSettings()
+                    await Promise.all([loadSettings(), loadJobs()])
                   }}
                   disabled={cleanupRunning}
                 >

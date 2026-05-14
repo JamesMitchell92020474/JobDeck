@@ -281,7 +281,7 @@ router.delete('/:id/chat', (req, res) => {
 // sent to Claude. This metadata is stored in the database but only shown
 // to Claude — the frontend displays the clean transcript without it.
 router.post('/:id/chat', async (req, res) => {
-  const { content, mode = 'chat', cvText: clientCvText, answerMeta } = req.body;
+  const { content, mode = 'chat', cvText: clientCvText, answerMeta, deep = false } = req.body;
   const db  = getDb();
   const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
   if (!job) return res.status(404).json({ error: 'Not found' });
@@ -328,7 +328,7 @@ router.post('/:id/chat', async (req, res) => {
     // Call the appropriate AI function based on whether this is an interview or regular chat.
     const { text, model: aiModel } = mode === 'interview'
       ? await interviewChat(history, job, cvText)
-      : await jobChat(history, job, cvText);
+      : await jobChat(history, job, cvText, { deep });
 
     db.prepare('INSERT INTO job_chat (job_id, role, content, model, mode) VALUES (?, ?, ?, ?, ?)').run(req.params.id, 'assistant', text, aiModel, mode);
     res.json({ role: 'assistant', content: text, model: aiModel });

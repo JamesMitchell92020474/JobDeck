@@ -258,7 +258,7 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | GET/PUT | /api/settings | Settings CRUD |
 | POST | /api/scrape | Trigger Playwright scrape |
 | POST | /api/housekeeping/run | Run housekeeping manually |
-| POST | /api/housekeeping/cleanup-unmatched | Remove scraped jobs not matching keywords+location (`{ dryRun: bool }`) |
+| POST | /api/housekeeping/cleanup-unmatched | Remove `New` jobs not matching keywords+location, or matching exclude keywords in title/description (`{ dryRun: bool }`) |
 | GET | /api/news | Merged Hacker News (Algolia API) + Geekzone NZ headlines (30min cache, max 7 days old) |
 | GET | /api/logs | Activity log viewer |
 | POST | /api/export/backup | Create zip backup (reads `backup_path` setting) |
@@ -284,18 +284,20 @@ Chat history is scoped by `mode` column on `job_chat`:
 
 The frontend fetches `GET /api/jobs/:id/chat-context` once on card open and passes `cvText` with every POST, avoiding repeated settings lookups.
 
-**Mock interview mode** — toggled via accent-coloured "Mock Interview" button in the chat tab header. 15 questions, no mid-interview feedback, professional closing, full written assessment at the end. Per-answer metadata tracked on the frontend (duration, word count, filler words via regex) and stored in `job_chat.answer_meta` (JSON). Backend prepends a formatted metadata header to each user message when building Claude's context. Auto-begins on first ever use; returns to an empty state after that so the user chooses when to start again. Completed interviews saved to `job_interview_runs` (transcript as plain text) via "Save Interview" button; past runs viewable/deletable in a collapsible panel.
+**Mock interview mode** — toggled via accent-coloured "Mock Interview" button in the chat tab header. 15 questions, no mid-interview feedback, professional closing, full written assessment at the end. An "Opus" toggle appears in the regular chat footer (when `deep_analysis = '1'`) to switch to the more powerful model for a session. Per-answer metadata tracked on the frontend (duration, word count, filler words via regex) and stored in `job_chat.answer_meta` (JSON). Backend prepends a formatted metadata header to each user message when building Claude's context. Auto-begins on first ever use; returns to an empty state after that so the user chooses when to start again. Completed interviews saved to `job_interview_runs` (transcript as plain text) via "Save Interview" button; past runs viewable/deletable in a collapsible panel.
 
 ### Voice mode (`src/frontend/hooks/useSpeech.js`)
 Shared hook used by both `Chat.jsx` and `ChatTab.jsx`.
 
 - **Voice mode toggle** — clicking the mic button once enters continuous voice mode (mic auto-restarts after every response). Clicking again exits.
 - **Auto-enable on interview** — entering mock interview mode auto-enables both voice and TTS (if supported). Exiting turns voice off.
-- **Auto-restart logic**: a `useEffect([messages])` fires after each assistant message and restarts the mic 200ms later. `no-speech` error (silence timeout) is treated as natural end so the restart loop continues — only real errors (permission denied etc.) stop the loop.
+- **Mic starts via TTS onEnd** — in interview mode, the mic only opens after TTS finishes reading the question, preventing the mic from picking up TTS audio or firing `no-speech` prematurely. If TTS is off, falls back to a 200ms delay.
+- **Assessment detection** — assistant messages over 500 characters are treated as the final assessment; the mic is stopped immediately when the message arrives (before TTS reads it), and voice mode is fully disabled.
+- **Regular chat is one-shot** — voice mode turns off after each send; no auto-restart. The speaker button also stops the mic when clicked while voice is active.
 - **Extended listening** — in interview mode, `startListening` uses `{ pauseBeforeSend: 2500 }`: continuous recognition, submits only after 2.5 seconds of silence, preventing premature sends mid-thought.
 - **TTS pauses**: `speak()` splits text on paragraph/bullet breaks and speaks each chunk as a separate `SpeechSynthesisUtterance` with a 350ms gap. Uses a `ttsChainRef` Symbol for clean cancellation.
-- **TTS text cleaning**: markdown stripped, `\n` preserved for paragraph splitting.
-- `startListening(onTranscript, onNaturalEnd?, options?)` — `options.pauseBeforeSend` (ms) enables continuous mode with silence-based submission.
+- **Enter to send** — both chat UIs use Enter to send, Shift+Enter for new line.
+- `startListening(onTranscript, onNaturalEnd?, options?)` — `options.pauseBeforeSend` (ms) enables continuous mode with silence-based submission. `no-speech` treated as natural end.
 - `cancelRef` distinguishes user-cancelled from natural timeout; `ttsChainRef` cancels queued TTS utterances.
 
 ## Kanban columns
@@ -306,7 +308,7 @@ Order: New → Interested → Applied → Interview → Offer → Rejected → A
 - **Interested** — jobs the user has chosen to pursue. Manually added jobs default here.
 - **Archived** — aged out (30d), expired, manually dismissed, or AI-filtered (poor fit). Housekeeping moves jobs here automatically.
 - **Rejected** — applied and didn't get it (user-initiated only).
-- Housekeeping soft-deletes jobs in either Archived or Rejected after 90 days.
+- Housekeeping defaults: archive after 21 days, soft-delete after 14 days, hard-delete after 7 days.
 
 ### AI filter
 

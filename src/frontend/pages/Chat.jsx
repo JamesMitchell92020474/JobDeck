@@ -349,12 +349,11 @@ export default function Chat() {
             placeholder={listening ? 'Listening…' : 'Ask about your job search…'}
             value={draft}
             onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send() }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
             rows={2}
           />
           <div className="chat-foot">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span className="hints" style={{ fontSize: 13 }}>⌘↵ to send</span>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: 'var(--ink-2)' }}>
                 <span className={`toggle ${deep ? 'on' : ''}`} onClick={() => setDeep(d => !d)} />
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

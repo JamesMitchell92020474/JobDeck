@@ -83,7 +83,7 @@ ${cvText}
 Return a JSON object with exactly these fields:
 {
   "fit_score": <integer 0-100>,
-  "summary": "<2-3 sentence match summary, written in second person addressing the user directly — use 'you/your', not the candidate's name or third person>",
+  "summary": "<2-3 sentence match summary, written in second person addressing the user directly — use 'you/your', not the candidate's name or third person. Only reference skills, experience, or requirements that are explicitly stated in the job description — do not infer or assume relevance from the CV alone>",
   "skills_gaps": ["<gap 1>", "<gap 2>"],
   "deadline": "<closing/application date as written in the ad e.g. '30 May 2025', or null if not mentioned>",
   "description_summary": "<1-2 sentence plain text overview of the role and its key requirements, written independently of the candidate>"
@@ -120,9 +120,10 @@ Write the cover letter as plain text. No subject line. Start with the salutation
 // "messages" is the full conversation history so Claude remembers earlier turns.
 // The job description and CV are included in the system prompt so Claude has
 // context about what role is being discussed.
-async function jobChat(messages, job, cvText) {
+async function jobChat(messages, job, cvText, { deep = false } = {}) {
   const client = getClient();
   const name   = userName();
+  const model  = (deep && getSetting('deep_analysis') === '1') ? OPUS : SONNET;
   const system = `You are helping ${name} prepare for a job application.
 Role: ${job.title} at ${job.company}.
 Job description: ${(job.description || '').slice(0, 2000)}
@@ -130,13 +131,12 @@ CV summary: ${(cvText || '').slice(0, 2000)}
 Be concise, specific, and practically useful.`;
 
   const res = await client.messages.create({
-    model: SONNET,
+    model,
     max_tokens: 1024,
     system,
-    // Map the stored messages to the format the API expects ({ role, content }).
     messages: messages.map(m => ({ role: m.role, content: m.content })),
   });
-  return { text: res.content[0].text, model: SONNET };
+  return { text: res.content[0].text, model };
 }
 
 // Runs the mock interview conversation.
