@@ -142,7 +142,7 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
     .slice(0, 8)
 
   const deadlines = activeJobs
-    .filter(j => j.deadline && j.deadline !== '—')
+    .filter(j => j.deadline && j.deadline !== '—' && !['Archived','Rejected'].includes(j.status))
     .sort((a, b) => a.deadline?.localeCompare(b.deadline))
     .slice(0, 4)
 

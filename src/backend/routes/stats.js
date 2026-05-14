@@ -107,8 +107,7 @@ router.get('/', (req, res) => {
 
   const deadlines = db.prepare(`
     SELECT * FROM jobs WHERE deadline IS NOT NULL AND deadline != '' AND deadline != '—'
-      AND is_soft_deleted = 0 AND status NOT IN ('Archived','Rejected')
-      ORDER BY deadline ASC LIMIT 5
+      AND is_soft_deleted = 0 ORDER BY deadline ASC LIMIT 5
   `).all();
 
   const recent = db.prepare(`
