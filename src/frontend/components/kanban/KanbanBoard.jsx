@@ -185,7 +185,7 @@ export default function KanbanBoard({ setRoute, setDetailJobId }) {
             className="btn-ai-filter"
             onClick={handleSync}
             disabled={syncing || !settings.scraper_keywords_tech?.trim()}
-            title={settings.scraper_keywords_tech?.trim() ? 'Scrape Seek and Trade Me Jobs for new listings' : 'Add keywords in Settings → Scraper preferences before syncing'}
+            title={settings.scraper_keywords_tech?.trim() ? 'Scrape Seek and Trade Me Jobs for new listings' : 'Add search keywords and upload a CV in Settings before syncing'}
           >
             {syncing
               ? <span className="spinner" style={{ width: 13, height: 13, borderColor: 'rgba(255,255,255,.35)', borderTopColor: '#fff' }} />

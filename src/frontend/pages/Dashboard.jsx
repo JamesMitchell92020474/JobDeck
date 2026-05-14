@@ -204,7 +204,7 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
           className="btn-ai-filter"
           onClick={handleSync}
           disabled={syncing || !settings.scraper_keywords_tech?.trim()}
-          title={settings.scraper_keywords_tech?.trim() ? 'Scrape Seek and Trade Me Jobs for new listings' : 'Add keywords in Settings → Scraper preferences before syncing'}
+          title={settings.scraper_keywords_tech?.trim() ? 'Scrape Seek and Trade Me Jobs for new listings' : 'Add search keywords and upload a CV in Settings before syncing'}
         >
           {syncing
             ? <span className="spinner" style={{ width: 11, height: 11, borderColor: 'rgba(255,255,255,.35)', borderTopColor: '#fff' }} />
@@ -212,7 +212,7 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
           {syncing ? 'Syncing…' : 'Sync sources'}
         </button>
         {!settings.scraper_keywords_tech?.trim() && (
-          <span className="dash-action-note" style={{ color: 'var(--col-rejected)' }}>Add keywords in Settings first</span>
+          <span className="dash-action-note" style={{ color: 'var(--col-rejected)' }}>Add search keywords and upload a CV in Settings</span>
         )}
         {syncResult != null && settings.scraper_keywords_tech?.trim() && (
           <span className="dash-action-note">{syncResult > 0 ? `+${syncResult} new` : 'Up to date'}</span>

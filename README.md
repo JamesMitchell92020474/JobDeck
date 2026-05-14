@@ -72,20 +72,29 @@ On first run it will automatically:
 
 ### Step 3 — Setup wizard
 
-The first time the app opens, a setup wizard will guide you through four steps:
+The first time the app opens, a setup wizard will guide you through:
 
-1. **Storage paths** — where to store data, backups, and logs (defaults to `C:\Users\<you>\JobDeck\...` — works on any PC regardless of drive layout)
-2. **Profile & API key** — your name, location, CV profile names, Anthropic API key, and optional desktop shortcut
-3. **Search keywords** — comma-separated keywords for each CV profile, used to scrape Seek and Trade Me Jobs
-4. **CV upload** — upload a PDF CV for each profile so JobDeck can score jobs against your experience (optional, can be done later in Settings)
+- **Storage paths** — where to store data, backups, and logs (defaults to `C:\Users\<you>\JobDeck\...` — works on any PC regardless of drive layout)
+- **Your name** — used in the dashboard greeting and AI prompts
+- **Location** — your city, used for job searches and weather
+- **API key** — your Anthropic API key for all AI features
+- **Desktop shortcut** — optionally adds a JobDeck icon to your desktop
 
-Click **Finish setup** on step 3 and the app restarts automatically, then step 4 runs against the live server.
+Click **Finish setup** and the app restarts automatically. You're ready to go.
 
 ---
 
-### Step 4 — You're ready
+### Step 4 — Configure Settings
 
-After the wizard completes you're ready to sync. The **Sync sources** button is disabled until you've set keywords (done in the wizard), so your first sync will pull relevant results immediately.
+Go to **Settings** and fill in:
+
+| Setting | What it is |
+|---|---|
+| **Profile & CV** | Name your two CV profiles (e.g. "Tech / IT"), upload the PDFs, then set scraper keywords for each |
+| **Location** | Already set in the wizard — adjust here if needed |
+| **Accent colour** | Pick a colour you like |
+
+The **Sync sources** button is disabled until you've added keywords in Settings → Scraper preferences.
 
 ---
 
