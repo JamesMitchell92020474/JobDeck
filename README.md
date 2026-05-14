@@ -86,15 +86,24 @@ Click **Finish setup** and the app restarts automatically. You're ready to go.
 
 ### Step 4 — Configure Settings
 
-Go to **Settings** and fill in:
+Go to **Settings** and complete the following before syncing for the first time:
 
-| Setting | What it is |
+**Profile & CV** (Settings → Profile & CV)
+- Name your two CV profiles to match your job search types (e.g. "Tech / IT" and "Retail / Hospitality")
+- Upload a PDF CV for each profile — JobDeck uses these to score job listings against your experience
+
+**Search keywords** (Settings → Scraper preferences)
+
+Keywords are what JobDeck uses to search Seek and Trade Me Jobs — only listings that match at least one of your keywords will be scraped. Without keywords, the Sync button is disabled.
+
+- Add keywords for each CV profile as comma-separated terms (e.g. `front end developer, React, IT support`)
+- Be specific enough to get relevant results but broad enough to catch variations
+- **Exclude keywords** — optionally add terms whose presence in a job title or description will cause it to be automatically skipped (e.g. `Senior`, `Manager`). These appear below the include keywords for each profile.
+
+| Other setting | What it is |
 |---|---|
-| **Profile & CV** | Name your two CV profiles (e.g. "Tech / IT"), upload the PDFs, then set scraper keywords for each |
 | **Location** | Already set in the wizard — adjust here if needed |
 | **Accent colour** | Pick a colour you like |
-
-The **Sync sources** button is disabled until you've added keywords in Settings → Scraper preferences.
 
 ---
 
