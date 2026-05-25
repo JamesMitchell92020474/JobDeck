@@ -98,6 +98,7 @@ function getDb() {
   try { db.exec("ALTER TABLE job_chat ADD COLUMN mode TEXT NOT NULL DEFAULT 'chat'") } catch {}
   try { db.exec('ALTER TABLE job_chat ADD COLUMN answer_meta TEXT') } catch {}
   try { db.exec('ALTER TABLE jobs ADD COLUMN description_summary TEXT') } catch {}
+  try { db.exec('ALTER TABLE jobs ADD COLUMN cover_letter_settings TEXT') } catch {}
   try { db.exec('ALTER TABLE activity_logs ADD COLUMN job_id INTEGER') } catch {}
 
   // One-time migration: move all existing global chat messages into a single

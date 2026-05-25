@@ -188,7 +188,7 @@ router.get('/:id', (req, res) => {
 // PUT /api/jobs/:id
 router.put('/:id', (req, res) => {
   const fields = ['title','company','location','source','source_url','description','salary','job_type',
-    'deadline','calendar_reminder','notes','cover_letter','status','fit_score','ai_summary','skills_gaps','job_category'];
+    'deadline','calendar_reminder','notes','cover_letter','cover_letter_settings','status','fit_score','ai_summary','skills_gaps','job_category'];
   const updates = [];
   const params = [];
   for (const f of fields) {
@@ -408,15 +408,20 @@ router.post('/:id/cover-letter', async (req, res) => {
 
 // POST /api/jobs/:id/export-pdf
 router.post('/:id/export-pdf', async (req, res) => {
-  const { html } = req.body;
+  const { html, settings } = req.body;
   const job = getDb().prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
   if (!job) return res.status(404).json({ error: 'Not found' });
+
+  // Merge: request settings > job's stored settings > defaults
+  let jobSettings = {};
+  try { jobSettings = JSON.parse(job.cover_letter_settings || '{}'); } catch {}
+  const mergedSettings = Object.assign({}, jobSettings, settings || {});
 
   try {
     const dir = uploadsDir('cover-letters');
     const dateStr = new Date().toISOString().slice(0,16).replace('T','_').replace(':','-');
     const filename = `CoverLetter_${(job.company||'').replace(/\s/g,'_')}_${dateStr}.pdf`;
-    const filePath = await exportCoverLetterPDF(html || `<p>${job.cover_letter}</p>`, dir, filename);
+    const filePath = await exportCoverLetterPDF(html || `<p>${job.cover_letter}</p>`, dir, filename, mergedSettings);
 
     const stat = require('fs').statSync(filePath);
     const db = getDb();
@@ -433,15 +438,19 @@ router.post('/:id/export-pdf', async (req, res) => {
 
 // POST /api/jobs/:id/export-word
 router.post('/:id/export-word', async (req, res) => {
-  const { html } = req.body;
+  const { html, settings } = req.body;
   const job = getDb().prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
   if (!job) return res.status(404).json({ error: 'Not found' });
+
+  let jobSettings = {};
+  try { jobSettings = JSON.parse(job.cover_letter_settings || '{}'); } catch {}
+  const mergedSettings = Object.assign({}, jobSettings, settings || {});
 
   try {
     const dir = uploadsDir('cover-letters');
     const dateStr = new Date().toISOString().slice(0,16).replace('T','_').replace(':','-');
     const filename = `CoverLetter_${(job.company||'').replace(/\s/g,'_')}_${dateStr}.docx`;
-    const filePath = await exportCoverLetterDocx(html || job.cover_letter || '', dir, filename);
+    const filePath = await exportCoverLetterDocx(html || job.cover_letter || '', dir, filename, mergedSettings);
 
     const stat = require('fs').statSync(filePath);
     const db = getDb();

@@ -96,6 +96,7 @@ Migrations run in `database.js` via `try { db.exec('ALTER TABLE...') } catch {}`
 
 Key schema additions (beyond initial schema):
 - `jobs.logo_url`, `jobs.job_category`, `jobs.description_summary` — added via migrations
+- `jobs.cover_letter_settings TEXT` — JSON per-job page layout (margins, font, page size, letterhead toggle, active profile)
 - `job_chat.mode TEXT DEFAULT 'chat'` — separates regular chat from interview history
 - `job_chat.answer_meta TEXT` — JSON metadata per interview answer (duration, wordCount, fillerWords)
 - `global_chat.session_id` — links messages to a named session
@@ -134,6 +135,8 @@ catch (e) { db.exec('ROLLBACK'); }
 | `last_sync_{source}` | ISO timestamp of last successful sync per source |
 | `cv_label_1` | Display name for the first CV profile (default: "CV Profile 1") |
 | `cv_label_2` | Display name for the second CV profile (default: "CV Profile 2") |
+| `cl_profile_tech` | JSON — global cover letter letterhead for tech/IT jobs (logo, name, contact, fonts, colours) |
+| `cl_profile_hospitality` | JSON — global cover letter letterhead for hospitality/retail jobs |
 | `backup_path` | Override for backup directory (falls back to BACKUP_PATH env var) |
 | `log_path` | Override for log directory (falls back to LOG_PATH env var) |
 | `ai_filter_threshold` | Fit score below which AI filter archives jobs (default: 40) |
@@ -241,8 +244,8 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | GET | /api/jobs/:id/chat-context | Returns `{ cvText }` for the job — fetched once by the frontend on card open |
 | GET/POST | /api/jobs/:id/chat | Per-card Claude chat (`?mode=chat\|interview`; POST body includes `{ mode, cvText }`) |
 | POST | /api/jobs/:id/cover-letter | Generate cover letter |
-| POST | /api/jobs/:id/export-pdf | Export cover letter as PDF (Playwright-based, saves to uploads/cover-letters/) |
-| POST | /api/jobs/:id/export-word | Export as .docx (saves to uploads/cover-letters/) |
+| POST | /api/jobs/:id/export-pdf | Export cover letter as PDF — body: `{ html, settings }`. Applies page margins, fonts, letterhead from `settings`; falls back to `jobs.cover_letter_settings`. Playwright-based, saves to uploads/cover-letters/ |
+| POST | /api/jobs/:id/export-word | Export as .docx — body: `{ html, settings }`. Proper HTML→docx parser (bold/italic/underline/headings/lists/colours/fonts). Same settings merge as PDF export |
 | GET | /api/jobs/:id/files/:fileId/serve | Serve file inline or as download (`?download=1`) |
 | POST/DELETE | /api/jobs/:id/files | File attachments |
 | GET | /api/jobs/:id/interview-runs | List saved interview transcripts |
@@ -267,6 +270,45 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | GET/PUT | /api/export/cover-letter-template | Cover letter template |
 | GET | /api/jobs/:id/activity | Per-job activity log entries (from `activity_logs` filtered by `job_id`) |
 | DELETE | /api/jobs/:id/chat | Clear in-progress chat messages for a mode (`?mode=interview`) without saving |
+
+## Cover letter editor
+
+`src/frontend/components/cards/tabs/CoverLetterTab.jsx` — orchestrates everything.
+`src/frontend/components/editor/RichTextEditor.jsx` — Tiptap editor with A4 page canvas and extended toolbar.
+`src/frontend/components/editor/LetterheadBlock.jsx` — letterhead zone (logo, name, contact).
+`src/frontend/components/editor/useFonts.js` — loads system fonts via Local Font Access API; falls back to curated list of 25 Windows fonts.
+`src/backend/services/pdfExport.js` — Playwright PDF with full settings support.
+`src/backend/services/wordExport.js` — HTML→docx with inline run parser (bold/italic/underline/color/font/size/alignment/headings/lists).
+
+### Page canvas
+The editor renders inside a white A4/Letter page on a grey print-preview background — WYSIWYG. Page size, all four margins (mm), font family, font size, line height, and paragraph spacing (before/after in px) are all configurable via a floating ⚙ panel in the toolbar. Settings are stored per-job in `jobs.cover_letter_settings` (JSON).
+
+`cover_letter_settings` shape:
+```json
+{
+  "pageSize": "A4",
+  "margins": { "top": 25, "bottom": 25, "left": 25, "right": 25 },
+  "fontFamily": "Georgia, serif",
+  "fontSize": "12pt",
+  "lineHeight": 1.7,
+  "spaceBefore": 0,
+  "spaceAfter": 14,
+  "letterheadEnabled": false,
+  "activeProfile": null
+}
+```
+
+### Toolbar
+Extended beyond the original: font family dropdown (system fonts via Local Font Access API, curated fallback), text colour button (live `<input type="color">`), line height select, and a ⚙ page settings button opening a floating panel. The extended `TextStyle` mark handles `fontSize`, `color`, and `fontFamily` as combined inline attributes on a single `<span>`.
+
+### Cover letter profiles
+Two global letterhead profiles stored in settings (`cl_profile_tech`, `cl_profile_hospitality`). Each holds logo (base64-encoded, compressed on upload), name text + styling, contact text + styling, separator toggle/colour. Profiles are edited inline in the letterhead block — changes save globally (not per-job). When you edit the letterhead on any tech job, the tech profile updates for all cover letters.
+
+**Auto-selection**: the active profile defaults to the job's `job_category` (`tech` → tech profile, `hospitality` → hospitality profile). The user can override with a two-button profile switcher in the action bar. The override is stored as `activeProfile` in `cover_letter_settings`.
+
+**Labels**: profile switcher buttons use `cv_label_1` / `cv_label_2` from settings (same labels used for CV profiles and board filter chips).
+
+**Export**: both PDF and Word exports merge the active profile's letterhead with the job's page settings. The letterhead renders as HTML in the PDF; in Word it renders as styled paragraphs (logo shown as a placeholder note since base64 image embedding in docx is complex).
 
 ## Chat features
 

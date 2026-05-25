@@ -509,11 +509,53 @@ h1,h2,h3,h4  { margin: 0; font-weight: 500; }
 .tab .tab-ct { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-4); background: var(--bg-2); padding: 1px 6px; border-radius: 100px; }
 .tab-body { padding: var(--pad); flex: 1; overflow-y: auto; }
 
-/* Cover letter editor */
+/* ═══════════════════════════════════════════════════════════
+   Cover letter editor
+   ═══════════════════════════════════════════════════════════ */
+
+/* Tab root */
+.cl-tab-root { display: flex; flex-direction: column; gap: 0; }
+
+/* Action bar above the editor */
+.cl-tab-actions {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.cl-tab-spacer { flex: 1; }
+.cl-tab-bar-divider { width: 1px; height: 20px; background: var(--rule-2); flex-shrink: 0; }
+.btn-active { background: var(--accent-soft) !important; color: var(--accent) !important; border-color: var(--accent) !important; }
+
+/* Profile switcher — shown next to letterhead toggle */
+.cl-profile-switcher {
+  display: flex; border: 1px solid var(--rule-2); border-radius: 7px; overflow: hidden;
+}
+.cl-profile-btn {
+  padding: 0 13px; height: 30px; border: none; background: transparent;
+  color: var(--ink-3); font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: background .12s, color .12s; white-space: nowrap;
+}
+.cl-profile-btn:not(:last-child) { border-right: 1px solid var(--rule-2); }
+.cl-profile-btn:hover  { background: var(--bg-sunk); color: var(--ink); }
+.cl-profile-btn.active { background: var(--accent); color: #fff; }
+
+/* Profile label + save indicator in letterhead control strip */
+.cl-lh-profile-badge {
+  font-size: 10.5px; font-weight: 700; color: var(--accent);
+  letter-spacing: .03em; padding-right: 4px; white-space: nowrap;
+}
+.cl-lh-saved-indicator {
+  font-size: 10.5px; color: var(--col-offer); font-family: var(--font-mono);
+  animation: cl-fade-in .15s ease;
+}
+@keyframes cl-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* Toolbar */
+.cl-editor-root { display: flex; flex-direction: column; }
 .cl-toolbar {
   display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; overflow-x: auto;
   padding: 8px 12px; border: 1px solid var(--rule);
   border-radius: var(--radius) var(--radius) 0 0; background: var(--bg-2); border-bottom: 0;
+  position: sticky; top: 0; z-index: 10;
 }
 .cl-toolbar .group { display: flex; gap: 2px; padding: 0 6px; border-right: 1px solid var(--rule); }
 .cl-toolbar .group:last-child { border-right: 0; }
@@ -521,19 +563,188 @@ h1,h2,h3,h4  { margin: 0; font-weight: 500; }
   width: 28px; height: 28px; display: grid; place-items: center;
   border-radius: 4px; color: var(--ink-2); font-size: 12px; font-weight: 500; cursor: pointer;
   transition: background .12s; padding: 0; border: none; background: transparent; flex-shrink: 0;
+  position: relative;
 }
 .cl-tool:hover { background: var(--bg-sunk); }
 .cl-tool.active { background: var(--ink); color: var(--bg-2); }
-.cl-select { padding: 0 4px; font-size: 11px; font-family: var(--font-mono); cursor: pointer; border: none; background: transparent; color: var(--ink-2); outline: none; height: 28px; width: 54px; }
-.cl-toolbar .spacer { flex: 1; }
-.cl-editor-wrap { border: 1px solid var(--rule); border-radius: 0 0 var(--radius) var(--radius); min-height: 420px; background: var(--bg); }
-.cl-editor-wrap .ProseMirror {
-  padding: 32px 40px; min-height: 420px; outline: none;
-  font-family: var(--font-display); font-weight: 300; font-size: 15.5px; line-height: 1.75;
-  color: var(--ink); letter-spacing: -0.005em;
+.cl-select {
+  padding: 0 4px; font-size: 11px; font-family: var(--font-mono);
+  cursor: pointer; border: none; background: transparent; color: var(--ink-2);
+  outline: none; height: 28px; width: 54px;
 }
-.cl-editor-wrap .ProseMirror:focus { border-color: var(--ink-3); }
-.cl-editor-wrap .ProseMirror p { margin: 0 0 1em; }
+.cl-font-family-select { width: 130px; font-family: var(--font-body) !important; font-size: 11.5px !important; }
+.cl-toolbar .spacer { flex: 1; }
+
+/* Text colour button */
+.cl-color-btn { flex-direction: column; gap: 1px; overflow: visible; width: 28px; height: 28px; }
+.cl-color-icon-a { font-size: 13px; font-weight: 700; line-height: 1; font-family: var(--font-body); }
+.cl-color-bar { width: 16px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+
+/* ── Page settings floating panel ────────────────────────── */
+.cl-settings-panel {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 200;
+  background: var(--bg-2); border: 1px solid var(--rule-2);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  padding: 14px 16px; width: 260px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.cl-sp-section { display: flex; flex-direction: column; gap: 8px; }
+.cl-sp-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--ink-4);
+}
+.cl-sp-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cl-sp-field-label { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.cl-sp-input {
+  width: 52px; height: 26px; padding: 0 6px;
+  border: 1px solid var(--rule-2); border-radius: 5px;
+  background: var(--bg); color: var(--ink);
+  font-size: 12px; font-family: var(--font-mono); outline: none;
+}
+.cl-sp-input:focus { border-color: var(--accent); }
+.cl-sp-size-btn {
+  padding: 4px 14px; border-radius: 6px; border: 1px solid var(--rule-2);
+  background: var(--bg); color: var(--ink-2); font-size: 12px; cursor: pointer;
+  transition: all .12s;
+}
+.cl-sp-size-btn:hover { border-color: var(--accent); color: var(--accent); }
+.cl-sp-size-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.cl-sp-margin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.cl-sp-margin-item { display: flex; align-items: center; gap: 5px; }
+.cl-sp-margin-item label { font-size: 11px; color: var(--ink-3); width: 28px; }
+.cl-sp-hint { font-size: 11px; color: var(--col-offer); font-family: var(--font-mono); }
+
+/* ── A4/Letter page canvas ───────────────────────────────── */
+.cl-page-outer {
+  background: #c8c6d8;
+  padding: 28px 20px 36px;
+  border: 1px solid var(--rule);
+  border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  overflow-x: auto;
+}
+[data-mode="dark"] .cl-page-outer { background: #0c0b18; }
+
+.cl-page {
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0,0,0,.18), 0 12px 40px rgba(0,0,0,.14);
+  margin: 0 auto;
+  min-height: 260mm;
+  color: #1a1a1a;
+}
+.cl-page[data-size="A4"]    { width: 210mm; }
+.cl-page[data-size="Letter"]{ width: 216mm; }
+
+/* Editor content inside the page */
+.cl-page .ProseMirror {
+  min-height: 180mm;
+  outline: none;
+  font-family: var(--cl-doc-font-family, Georgia, serif);
+  font-size:   var(--cl-doc-font-size,   12pt);
+  line-height: var(--cl-doc-line-height, 1.7);
+  color: #1a1a1a;
+  word-break: break-word;
+}
+.cl-page .ProseMirror p {
+  margin-top:    var(--cl-space-before, 0px);
+  margin-bottom: var(--cl-space-after,  14px);
+}
+.cl-page .ProseMirror h1,
+.cl-page .ProseMirror h2,
+.cl-page .ProseMirror h3 { margin-top: 1.2em; margin-bottom: 0.4em; }
+.cl-page .ProseMirror ul,
+.cl-page .ProseMirror ol  { margin-bottom: var(--cl-space-after, 14px); padding-left: 1.4em; }
+.cl-page .ProseMirror li  { margin-bottom: .25em; }
+
+/* ── Letterhead block ────────────────────────────────────── */
+.cl-lh-wrap { margin-bottom: 0; }
+
+/* Control strip above the letterhead zone */
+.cl-lh-controls {
+  display: flex; align-items: center; gap: 0; flex-wrap: wrap;
+  background: var(--bg-sunk); border: 1px solid var(--rule);
+  border-bottom: none; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding: 5px 10px; gap: 4px;
+  /* floats above the white page in the grey canvas area */
+  position: relative; z-index: 5;
+}
+.cl-lh-ctrl-group { display: flex; align-items: center; gap: 3px; padding: 0 6px 0 0; }
+.cl-lh-ctrl-divider { width: 1px; height: 18px; background: var(--rule-2); margin: 0 4px; flex-shrink: 0; }
+.cl-lh-ctrl-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-4); padding-right: 4px; white-space: nowrap; }
+.cl-lh-ctrl-btn {
+  width: 24px; height: 24px; display: grid; place-items: center;
+  border-radius: 4px; border: none; background: transparent;
+  color: var(--ink-3); cursor: pointer; transition: background .1s, color .1s; padding: 0;
+}
+.cl-lh-ctrl-btn:hover  { background: var(--rule); color: var(--ink); }
+.cl-lh-ctrl-btn.active { background: var(--ink); color: var(--bg-2); }
+.cl-lh-ctrl-danger:hover { background: var(--bad-soft); color: var(--bad); }
+.cl-lh-number-input {
+  width: 42px; height: 22px; padding: 0 4px;
+  border: 1px solid var(--rule-2); border-radius: 4px;
+  background: var(--bg-2); color: var(--ink);
+  font-size: 11px; font-family: var(--font-mono); outline: none;
+}
+.cl-lh-number-input:focus { border-color: var(--accent); }
+.cl-lh-ctrl-unit { font-size: 10px; color: var(--ink-4); }
+.cl-lh-select {
+  height: 24px; padding: 0 4px; border: 1px solid var(--rule-2); border-radius: 4px;
+  background: var(--bg-2); color: var(--ink); font-size: 11px; cursor: pointer; outline: none;
+  width: 52px;
+}
+.cl-lh-select-wide { width: 120px; font-family: var(--font-body) !important; }
+.cl-lh-color-wrap {
+  position: relative; width: 24px; height: 24px;
+  display: grid; place-items: center; cursor: pointer;
+}
+.cl-lh-color-wrap input[type="color"] {
+  position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;
+}
+.cl-lh-color-swatch {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 1.5px solid var(--rule-2); display: block;
+  transition: border-color .1s;
+}
+.cl-lh-color-wrap:hover .cl-lh-color-swatch { border-color: var(--ink-3); }
+.cl-lh-checkbox-label {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--ink-2); cursor: pointer; white-space: nowrap;
+}
+
+/* Letterhead preview area (sits at top of white page) */
+.cl-letterhead {
+  display: flex; flex-direction: column;
+  padding-bottom: 0; margin-bottom: 0;
+}
+
+/* Logo upload placeholder (shown when no logo) */
+.cl-lh-logo-placeholder {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; margin-bottom: 10px;
+  border: 1.5px dashed #bbb; border-radius: 6px;
+  background: transparent; color: #888; font-size: 11.5px;
+  cursor: pointer; transition: border-color .15s, color .15s;
+}
+.cl-lh-logo-placeholder:hover { border-color: #555; color: #333; }
+
+/* Name and contact inputs inside the letterhead */
+.cl-lh-name-input,
+.cl-lh-contact-input {
+  border: none; background: transparent; outline: none;
+  width: 100%; display: block; padding: 0;
+}
+.cl-lh-name-input    { margin-bottom: 4px; }
+.cl-lh-contact-input { margin-bottom: 0; }
+.cl-lh-name-input::placeholder    { color: #bbb; }
+.cl-lh-contact-input::placeholder { color: #ccc; }
+
+/* Separator line */
+.cl-lh-separator {
+  border: none; border-top: 1px solid;
+  width: 100%; margin: 12px 0 16px;
+}
+
+/* Legacy fallback — keep cl-actions for other places that might reference it */
 .cl-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; align-items: center; }
 
 /* Chat */
