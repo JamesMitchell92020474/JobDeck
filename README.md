@@ -20,9 +20,13 @@ AI-powered job search dashboard for Windows. Scrapes Seek and Trade Me Jobs, sco
 - Voice mode — hands-free conversation; mic restarts automatically after each response
 - Mock interview — voice and TTS auto-enable on entry; 15 realistic questions with 2.5 second pause before sending to allow thinking time; written assessment at the end; save, restart, and compare transcripts across sessions
 
-**Documents**
-- AI cover letter generation with a custom style template
-- Export as PDF or Word
+**Cover letters**
+- Full page editor — A4 or Letter canvas with drop-shadow print preview so you see exactly what will export
+- Per-job page settings — all four margins, font family (picks up your installed system fonts), font size, line height, and paragraph spacing
+- Text colour picker and inline font styling on selected text
+- Dual letterhead profiles — one for Tech/IT, one for Hospitality/Retail, each with its own logo, name, styled contact details, and separator line. Set them up once; they auto-load based on the job category with a one-click switcher to override
+- AI cover letter generation from your CV and the job description
+- Export as PDF (exact page layout via Playwright) or Word (.docx with formatting preserved)
 - Two CV profiles with configurable labels (e.g. "Tech / IT" and "Retail / Hospitality")
 
 **Other**
