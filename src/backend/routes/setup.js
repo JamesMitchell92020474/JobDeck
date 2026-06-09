@@ -60,22 +60,44 @@ router.post('/complete', (req, res) => {
   if (createShortcut) {
     try {
       const projectRoot = path.resolve(__dirname, '../../..');
-      const batPath     = path.join(projectRoot, 'JobDeck.bat');
-      const iconPath    = path.join(projectRoot, 'assets', 'icon.ico');
-      const shortcut    = path.join(os.homedir(), 'Desktop', 'JobDeck.lnk');
-      const ps = [
-        `$ws = New-Object -ComObject WScript.Shell`,
-        `$sc = $ws.CreateShortcut("${shortcut.replace(/\\/g, '\\\\')}")`,
-        `$sc.TargetPath = "${batPath.replace(/\\/g, '\\\\')}"`,
-        `$sc.WorkingDirectory = "${projectRoot.replace(/\\/g, '\\\\')}"`,
-        `$sc.IconLocation = "${iconPath.replace(/\\/g, '\\\\')}"`,
-        `$sc.Description = "JobDeck — Job Search Dashboard"`,
-        `$sc.Save()`,
-      ].join('; ');
-      const tmpScript = path.join(os.tmpdir(), 'jd-shortcut.ps1');
-      fs.writeFileSync(tmpScript, ps);
-      execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tmpScript}"`, { stdio: 'pipe' });
-      fs.unlinkSync(tmpScript);
+      if (process.platform === 'win32') {
+        const batPath  = path.join(projectRoot, 'JobDeck.bat');
+        const iconPath = path.join(projectRoot, 'assets', 'icon.ico');
+        const shortcut = path.join(os.homedir(), 'Desktop', 'JobDeck.lnk');
+        const ps = [
+          `$ws = New-Object -ComObject WScript.Shell`,
+          `$sc = $ws.CreateShortcut("${shortcut.replace(/\\/g, '\\\\')}")`,
+          `$sc.TargetPath = "${batPath.replace(/\\/g, '\\\\')}"`,
+          `$sc.WorkingDirectory = "${projectRoot.replace(/\\/g, '\\\\')}"`,
+          `$sc.IconLocation = "${iconPath.replace(/\\/g, '\\\\')}"`,
+          `$sc.Description = "JobDeck - Job Search Dashboard"`,
+          `$sc.Save()`,
+        ].join('; ');
+        const tmpScript = path.join(os.tmpdir(), 'jd-shortcut.ps1');
+        fs.writeFileSync(tmpScript, ps);
+        execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tmpScript}"`, { stdio: 'pipe' });
+        fs.unlinkSync(tmpScript);
+      } else {
+        const launcherPath = path.join(projectRoot, 'jobdeck.sh');
+        const iconPath     = path.join(projectRoot, 'assets', 'icon.svg');
+        const desktopDir   = path.join(os.homedir(), 'Desktop');
+        const shortcut     = path.join(desktopDir, 'JobDeck.desktop');
+        const desktop = [
+          '[Desktop Entry]',
+          'Version=1.0',
+          'Type=Application',
+          'Name=JobDeck',
+          'Comment=Job Search Dashboard',
+          `Exec=bash "${launcherPath}"`,
+          `Icon=${iconPath}`,
+          `Path=${projectRoot}`,
+          'Terminal=true',
+          'Categories=Office;',
+        ].join('\n') + '\n';
+        fs.mkdirSync(desktopDir, { recursive: true });
+        fs.writeFileSync(shortcut, desktop, { mode: 0o755 });
+        try { execSync(`gio set "${shortcut}" metadata::trusted true`, { stdio: 'pipe' }); } catch {}
+      }
     } catch (e) {
       console.warn('[setup] Could not create desktop shortcut:', e.message);
     }

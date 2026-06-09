@@ -26,24 +26,23 @@ first-run setup wizard, or manually via Settings → Data & Storage.
 
 ## Running in dev
 
-```powershell
-cd C:\Users\James\Projects\JobDeck
+```bash
+cd ~/Projects/JobDeck
 npm run dev:browser  # backend (nodemon) + Vite + opens browser — no Electron
 npm run dev          # backend + Vite + Electron
 ```
 
 Or separately:
-```powershell
+```bash
 npm run dev:be       # backend on :3001 (auto-restarts via nodemon on file changes)
 npm run dev:fe       # Vite on :5173
 ```
 
-The app works fully in browser at http://localhost:5173. Electron has a known issue
-on this machine (ESET antivirus blocks V8 context snapshot loading — see below).
+The app works fully in browser at http://localhost:5173.
 
 ## Running in production (end-user mode)
 
-```powershell
+```bash
 npm run build:fe     # compile React app into dist/
 npm start            # backend serves dist/ as static files on :3001
 ```
@@ -51,13 +50,10 @@ npm start            # backend serves dist/ as static files on :3001
 `index.js` detects the `dist/` folder and serves it via `express.static`. A catch-all
 route returns `index.html` for any non-API path (required for React client-side routing).
 
-End users double-click **`JobDeck.bat`** — a thin wrapper that runs `JobDeck.ps1` via
-PowerShell (uses full user PATH, avoiding cmd.exe PATH limitations). On first run the
-setup wizard runs in the browser. **`Update.bat`** / **`Update.ps1`** rebuild and relaunch
-after pulling new changes from GitHub.
-
-The PS1 scripts must use ASCII-only characters — PowerShell 5.1 misparses non-ASCII
-characters (em dashes, box-drawing chars) in script files without a BOM.
+Run **`bash jobdeck.sh`** to launch the app. On first run it installs packages, downloads
+Playwright Chromium, and builds `dist/`. **`bash update.sh`** rebuilds and relaunches
+after pulling new changes from GitHub. Both scripts source `~/.nvm/nvm.sh` so nvm-managed
+Node is available without a login shell.
 
 ## First-run setup wizard
 
@@ -72,10 +68,11 @@ wizard instead of the main app — no DB is initialised during setup.
 
 Sync sources button is disabled (with inline note) until `scraper_keywords_tech` is set — user is directed to Settings → Scraper preferences. Filter with AI button is disabled when the board has no active jobs.
 
-On submit: `POST /api/setup/complete` writes `.env`, creates a desktop `.lnk` shortcut
-(via PowerShell WScript.Shell) if requested, spawns a fresh Node process with clean env,
-and exits with code 42. `JobDeck.ps1` loops on exit code 42 (restart signal).
-The frontend polls `GET /api/health` until the new process is up, then reloads.
+On submit: `POST /api/setup/complete` writes `.env`, creates a desktop shortcut if
+requested (`.desktop` file on Linux, `.lnk` via WScript.Shell on Windows), spawns a
+fresh Node process with clean env, and exits with code 42. `jobdeck.sh` loops on exit
+code 42 (restart signal). The frontend polls `GET /api/health` until the new process is
+up, then reloads.
 
 ## Vite config note
 
@@ -457,22 +454,6 @@ Nulls always sort to the bottom regardless of direction.
 
 ## Known issues
 
-### Electron V8 snapshot (ESET antivirus)
-`require('electron').app` returns `undefined` in the main process because ESET blocks
-Electron's V8 context snapshot from loading.
-
-**Fix:** Add Electron dist folder to ESET exclusions:
-`C:\Users\<you>\Projects\JobDeck\node_modules\electron\dist\`
-
-In ESET: Advanced Setup → Protections → Real-time file system protection → Exclusions
-(use "Paths" exclusion type, NOT "Extensions").
-
-The app is fully functional at http://localhost:5173 without Electron.
-
-### Playwright / ESET
-ESET may also block Playwright's Chromium. Add to exclusions:
-`C:\Users\james\AppData\Local\ms-playwright\`
-
 ### node:sqlite experimental warning
 `node --no-warnings` suppresses it. It's stable in Node.js 24 despite the label.
 
@@ -483,9 +464,9 @@ if empty, so the app works on any machine regardless of drive layout.
 
 ```
 ANTHROPIC_API_KEY=      # required for AI features
-DATA_PATH=              # defaults to %USERPROFILE%\JobDeck\data
-LOG_PATH=               # defaults to %USERPROFILE%\JobDeck\logs
-BACKUP_PATH=            # defaults to %USERPROFILE%\JobDeck\backups
+DATA_PATH=              # defaults to ~/JobDeck/data
+LOG_PATH=               # defaults to ~/JobDeck/logs
+BACKUP_PATH=            # defaults to ~/JobDeck/backups
 DISPLAY_NAME=           # seeded into display_name DB setting on first run
 SCRAPER_LOCATION=       # seeded into scraper_location DB setting on first run
 PORT=3001

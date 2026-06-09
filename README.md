@@ -1,6 +1,6 @@
 # JobDeck
 
-AI-powered job search dashboard for Windows. Scrapes Seek and Trade Me Jobs, scores listings against your CV using Claude AI, tracks applications through a kanban pipeline, and helps you prepare for interviews.
+AI-powered job search dashboard. Scrapes Seek and Trade Me Jobs, scores listings against your CV using Claude AI, tracks applications through a kanban pipeline, and helps you prepare for interviews.
 
 ---
 
@@ -39,8 +39,8 @@ AI-powered job search dashboard for Windows. Scrapes Seek and Trade Me Jobs, sco
 
 ## Requirements
 
-- **Windows** (the launcher is a `.bat` file)
-- **Node.js 24 or later** — download from [nodejs.org](https://nodejs.org) and choose version **24.x**
+- **Linux or Windows**
+- **Node.js 24 or later** — install via [nvm](https://github.com/nvm-sh/nvm) (recommended) or from [nodejs.org](https://nodejs.org)
   *(the app uses Node's built-in SQLite module which requires v24+)*
 - **An Anthropic API key** — get one free at [console.anthropic.com](https://console.anthropic.com)
   *(you pay per use; typical job search usage costs a few cents a month)*
@@ -63,9 +63,14 @@ Go to the GitHub repo → click the green **Code** button → **Download ZIP** �
 
 ### Step 2 — First run
 
-Double-click **`JobDeck.bat`** in the folder.
+**Linux:** open a terminal in the project folder and run:
+```bash
+bash jobdeck.sh
+```
 
-On first run it will automatically:
+**Windows:** double-click `JobDeck.bat` (not currently included — run `npm start` after `npm run build:fe`).
+
+On first run the script will automatically:
 1. Check your Node.js version
 2. Install all packages (`npm install`)
 3. Download the scraper browser (Playwright Chromium, ~150 MB — once only)
@@ -78,7 +83,7 @@ On first run it will automatically:
 
 The first time the app opens, a setup wizard will guide you through:
 
-- **Storage paths** — where to store data, backups, and logs (defaults to `C:\Users\<you>\JobDeck\...` — works on any PC regardless of drive layout)
+- **Storage paths** — where to store data, backups, and logs (defaults to `~/JobDeck/...`)
 - **Your name** — used in the dashboard greeting and AI prompts
 - **Location** — your city, used for job searches and weather
 - **API key** — your Anthropic API key for all AI features
@@ -113,7 +118,7 @@ Keywords are what JobDeck uses to search Seek and Trade Me Jobs — only listing
 
 ## Daily use
 
-- **Double-click `JobDeck.bat`** (or the desktop shortcut if you created one) to start the app each day. Close the server window to stop it.
+- Run **`bash jobdeck.sh`** (or use the desktop shortcut if you created one) to start the app each day. Close the terminal to stop it.
 - **Sync Sources** (dashboard) — scrapes Seek and Trade Me for new listings matching your keywords
 - **Filter with AI** — scores all new listings and archives anything below the configured fit threshold
 - **Job cards** — click any job to see the full description, chat with Claude about it, or start a mock interview
@@ -125,19 +130,13 @@ Keywords are what JobDeck uses to search Seek and Trade Me Jobs — only listing
 When new changes are published to GitHub:
 
 1. Pull the latest code (`git pull`, or download the ZIP again)
-2. Double-click **`Update.bat`** — it installs new packages, rebuilds, and relaunches automatically
+2. Run **`bash update.sh`** — it installs new packages, rebuilds, and relaunches automatically
 
 ---
 
 ## Troubleshooting
 
-**ESET antivirus** blocks Playwright's Chromium (used for scraping). Add to ESET exclusions:
-```
-C:\Users\<your username>\AppData\Local\ms-playwright\
-```
-In ESET: Advanced Setup → Protections → Real-time file system protection → Exclusions → use "Path" type.
-
-**Browser shows a blank page or error** — make sure the server window is open and didn't show any errors. Try refreshing after a few seconds.
+**Browser shows a blank page or error** — make sure the terminal running `jobdeck.sh` is still open and didn't show any errors. Try refreshing after a few seconds.
 
 **AI features not working** — go to Settings → AI and check that your Anthropic API key is entered correctly.
 
@@ -147,7 +146,7 @@ In ESET: Advanced Setup → Protections → Real-time file system protection →
 
 ## Development
 
-```powershell
+```bash
 npm run dev:browser   # backend + Vite, opens browser automatically (no Electron)
 npm run dev           # backend + Vite + Electron
 npm run dev:be        # backend only (nodemon, port 3001)

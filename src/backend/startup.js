@@ -26,12 +26,18 @@ function createDataFolders() {
 
 function checkDiskSpace() {
   try {
-    const warnGB = parseFloat(process.env.LOW_DISK_WARNING_GB || '2');
-    // On Windows, check C: drive free space via statvfs (not available natively)
-    // Using a cross-platform approach via the os module
-    // This is a best-effort check; proper disk stats require native addons
-    console.log('[startup] Disk space check skipped (requires native addon on Windows)');
-  } catch {}
+    const warnGB  = parseFloat(process.env.LOW_DISK_WARNING_GB || '2');
+    const dataPath = process.env.DATA_PATH || path.join(os.homedir(), 'JobDeck', 'data');
+    const stats    = fs.statfsSync(dataPath);
+    const freeGB   = (stats.bfree * stats.bsize) / 1e9;
+    if (freeGB < warnGB) {
+      console.warn(`[startup] Low disk space: ${freeGB.toFixed(1)} GB free (threshold: ${warnGB} GB)`);
+    } else {
+      console.log(`[startup] Disk space OK: ${freeGB.toFixed(1)} GB free`);
+    }
+  } catch {
+    console.log('[startup] Disk space check skipped');
+  }
 }
 
 function runStartup() {
