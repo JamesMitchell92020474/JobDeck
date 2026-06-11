@@ -454,6 +454,21 @@ Nulls always sort to the bottom regardless of direction.
 
 ## Known issues
 
+### Playwright Chromium installation hangs on Linux Mint
+`npx playwright install chromium` downloads the zip fine but hangs indefinitely during
+extraction. `jobdeck.sh` works around this by skipping the install if the binary already
+exists, with a 120s timeout as a safety net.
+
+**Manual fix** — download and extract the headless shell directly:
+```bash
+# Get the expected binary path
+node -e "const {chromium}=require('playwright-core');console.log(chromium.executablePath())"
+# Download from cdn.playwright.dev and unzip to the parent of that path
+wget -O /tmp/cs.zip "https://cdn.playwright.dev/builds/cft/<version>/linux64/chrome-headless-shell-linux64.zip"
+unzip /tmp/cs.zip -d ~/.cache/ms-playwright/chromium_headless_shell-<build>/
+chmod +x <path-to-binary>
+```
+
 ### node:sqlite experimental warning
 `node --no-warnings` suppresses it. It's stable in Node.js 24 despite the label.
 

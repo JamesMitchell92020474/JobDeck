@@ -47,8 +47,14 @@ if [ ! -d "node_modules" ]; then
 fi
 
 # Install Playwright Chromium (needed for job scraping)
-echo "  Checking scraper browser (Playwright Chromium)..."
-npx playwright install chromium --quiet 2>/dev/null || true
+# Skip if the binary already exists — npx playwright install can hang on Linux Mint
+# during extraction. If scraping fails, run: npx playwright install chromium
+PLAYWRIGHT_BIN=$(node -e "try{const {chromium}=require('playwright-core');console.log(chromium.executablePath());}catch{}" 2>/dev/null)
+if [ -z "$PLAYWRIGHT_BIN" ] || [ ! -f "$PLAYWRIGHT_BIN" ]; then
+  echo "  Installing scraper browser (Playwright Chromium, ~170 MB)..."
+  timeout 120 npx playwright install chromium --quiet 2>/dev/null || \
+    echo "  Warning: Playwright install timed out. Run 'npx playwright install chromium' manually if scraping fails."
+fi
 echo ""
 
 # First-time setup: build the frontend

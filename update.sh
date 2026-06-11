@@ -32,8 +32,13 @@ npm install
 echo ""
 
 # Update Playwright browser if needed
-echo "  Checking scraper browser..."
-npx playwright install chromium --quiet 2>/dev/null || true
+# Skip if binary already exists — npx playwright install can hang on Linux Mint
+PLAYWRIGHT_BIN=$(node -e "try{const {chromium}=require('playwright-core');console.log(chromium.executablePath());}catch{}" 2>/dev/null)
+if [ -z "$PLAYWRIGHT_BIN" ] || [ ! -f "$PLAYWRIGHT_BIN" ]; then
+  echo "  Installing scraper browser (Playwright Chromium)..."
+  timeout 120 npx playwright install chromium --quiet 2>/dev/null || \
+    echo "  Warning: Playwright install timed out. Run 'npx playwright install chromium' manually if scraping fails."
+fi
 echo ""
 
 # Rebuild the frontend

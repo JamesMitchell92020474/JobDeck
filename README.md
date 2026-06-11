@@ -134,6 +134,14 @@ When new changes are published to GitHub:
 
 ## Troubleshooting
 
+**Sync Sources does nothing / scraping fails** — Playwright's Chromium may not be installed. `jobdeck.sh` installs it automatically, but the extraction can hang on Linux Mint. If that happens, download and extract it manually:
+```bash
+# Find the version your Playwright expects
+node -e "const {chromium}=require('playwright-core');console.log(chromium.executablePath())"
+# Then download the headless shell zip from cdn.playwright.dev and extract it to that path
+# Or simply run: npx playwright install chromium
+```
+
 **Browser shows a blank page or error** — make sure the terminal running `jobdeck.sh` is still open and didn't show any errors. Try refreshing after a few seconds.
 
 **AI features not working** — go to Settings → AI and check that your Anthropic API key is entered correctly.
