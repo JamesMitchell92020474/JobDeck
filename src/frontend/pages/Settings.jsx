@@ -624,14 +624,14 @@ export default function Settings() {
         <h3>Data &amp; storage</h3>
         <div className="set-row">
           <div className="lbl">Data path</div>
-          <input className="input" style={{ maxWidth: 360 }} defaultValue={settings.data_path || 'D:\\JobDeck\\data'} disabled />
+          <input className="input" style={{ maxWidth: 360 }} defaultValue={settings.data_path || ''} disabled />
         </div>
         <div className="set-row">
           <div className="lbl">Backup path<small>Where zip backups are saved</small></div>
           <input
             className="input"
             style={{ maxWidth: 360 }}
-            defaultValue={settings.backup_path || 'D:\\JobDeck\\backups'}
+            defaultValue={settings.backup_path || ''}
             onBlur={e => saveSetting('backup_path', e.target.value)}
           />
         </div>
@@ -640,7 +640,7 @@ export default function Settings() {
           <input
             className="input"
             style={{ maxWidth: 360 }}
-            defaultValue={settings.log_path || 'D:\\JobDeck\\logs'}
+            defaultValue={settings.log_path || ''}
             onBlur={e => saveSetting('log_path', e.target.value)}
           />
         </div>

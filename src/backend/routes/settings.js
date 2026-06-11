@@ -1,11 +1,15 @@
 const express = require('express');
+const path = require('path');
+const os = require('os');
 const { getAllSettings, setSetting } = require('../db/database');
 const { log } = require('../services/logger');
 
 const router = express.Router();
 
 router.get('/', (req, res) => {
-  res.json(getAllSettings());
+  const settings = getAllSettings();
+  settings.data_path = process.env.DATA_PATH || path.join(os.homedir(), 'JobDeck', 'data');
+  res.json(settings);
 });
 
 router.put('/', (req, res) => {

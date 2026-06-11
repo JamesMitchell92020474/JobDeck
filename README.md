@@ -39,7 +39,7 @@ AI-powered job search dashboard. Scrapes Seek and Trade Me Jobs, scores listings
 
 ## Requirements
 
-- **Linux or Windows**
+- **Linux** (Linux Mint / Ubuntu recommended)
 - **Node.js 24 or later** — install via [nvm](https://github.com/nvm-sh/nvm) (recommended) or from [nodejs.org](https://nodejs.org)
   *(the app uses Node's built-in SQLite module which requires v24+)*
 - **An Anthropic API key** — get one free at [console.anthropic.com](https://console.anthropic.com)
@@ -63,12 +63,10 @@ Go to the GitHub repo → click the green **Code** button → **Download ZIP** �
 
 ### Step 2 — First run
 
-**Linux:** open a terminal in the project folder and run:
+Open a terminal in the project folder and run:
 ```bash
 bash jobdeck.sh
 ```
-
-**Windows:** double-click `JobDeck.bat` (not currently included — run `npm start` after `npm run build:fe`).
 
 On first run the script will automatically:
 1. Check your Node.js version

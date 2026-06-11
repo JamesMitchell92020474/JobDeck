@@ -2,13 +2,14 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { setSetting, getSetting } = require('../db/database');
 const { log } = require('../services/logger');
 
 const router = express.Router();
 
 function cvDir() {
-  const dir = path.join(process.env.DATA_PATH || 'D:\\JobDeck\\data', 'uploads', 'cv');
+  const dir = path.join(process.env.DATA_PATH || path.join(os.homedir(), 'JobDeck', 'data'), 'uploads', 'cv');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

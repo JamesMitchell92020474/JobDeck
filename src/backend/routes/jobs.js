@@ -1,9 +1,10 @@
 // API routes for everything to do with individual job listings.
 // Mounted at /api/jobs in server.js.
 const express = require('express');
-const multer  = require('multer');  // handles file uploads
+const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
+const os      = require('os');
 const { getDb, getSetting } = require('../db/database');
 const { log }               = require('../services/logger');
 const { scoreFit, generateCoverLetter, jobChat, interviewChat } = require('../services/ai');
@@ -25,10 +26,8 @@ function cvForJob(job) {
 
 const router = express.Router();
 
-// Returns the path to a subfolder inside the uploads directory, creating it if needed.
-// e.g. uploadsDir('attachments') → D:\JobDeck\data\uploads\attachments
 function uploadsDir(sub) {
-  const base = path.join(process.env.DATA_PATH || 'D:\\JobDeck\\data', 'uploads', sub);
+  const base = path.join(process.env.DATA_PATH || path.join(os.homedir(), 'JobDeck', 'data'), 'uploads', sub);
   fs.mkdirSync(base, { recursive: true });
   return base;
 }

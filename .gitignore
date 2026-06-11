@@ -5,9 +5,6 @@ dist-electron/
 *.db
 *.db-journal
 
-# D: drive data — never commit
-D:\
-
 # CVs and personal documents
 assets/*.pdf
 assets/*.docx
