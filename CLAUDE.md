@@ -234,7 +234,7 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | GET | /api/stats/welcome | AI-generated welcome message |
 | GET/POST | /api/jobs | List / create jobs |
 | POST | /api/jobs/filter-new | Score all unscored active jobs; archive New jobs below threshold (reads `ai_filter_threshold`) |
-| GET/PUT/DELETE | /api/jobs/:id | Single job CRUD |
+| GET/PUT/DELETE | /api/jobs/:id | Single job CRUD. PUT accepts: title, company, location, source, source_url, description, salary, job_type, posting_date, expiry_date, is_remote (bool→int), is_hybrid (bool→int), deadline, notes, status, fit_score, ai_summary, skills_gaps, job_category, cover_letter_settings |
 | PUT | /api/jobs/:id/move | Move to kanban column |
 | POST | /api/jobs/:id/ai-score | Score job against CV |
 | POST | /api/jobs/:id/fetch-description | Scrape description, logo, posting_date, job_type, salary from source_url; auto-scores in background |
@@ -372,6 +372,10 @@ Jobs are auto-tagged on creation (POST /api/jobs and scraper inserts) via `src/b
 | `null` | General | `cv_text_tech` → `cv_text_hospitality` → `cv_text` |
 
 Category labels are user-configurable via Settings — the internal DB values (`tech`/`hospitality`) are unchanged. Labels flow through to job card badges, board filter chips, category dropdown, and Add Job modal.
+
+## Edit job
+
+`src/frontend/components/cards/AddJobModal.jsx` doubles as an edit modal. When passed `initialJob` instead of `initialStatus`, it pre-fills all fields (description stripped of HTML tags) and calls `PUT /api/jobs/:id` on submit. The **Edit job** button lives in the tab bar of `CardDetail.jsx`. Boolean fields (`is_remote`, `is_hybrid`) are coerced to integers before binding to SQLite — `node:sqlite` does not accept JS booleans.
 Category shown as label + dropdown selector in card detail aside.
 
 ## Dashboard

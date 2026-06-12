@@ -187,13 +187,19 @@ router.get('/:id', (req, res) => {
 // PUT /api/jobs/:id
 router.put('/:id', (req, res) => {
   const fields = ['title','company','location','source','source_url','description','salary','job_type',
+    'posting_date','expiry_date','is_remote','is_hybrid',
     'deadline','calendar_reminder','notes','cover_letter','cover_letter_settings','status','fit_score','ai_summary','skills_gaps','job_category'];
   const updates = [];
   const params = [];
   for (const f of fields) {
     if (f in req.body) {
       updates.push(`${f} = ?`);
-      params.push(f === 'skills_gaps' ? JSON.stringify(req.body[f]) : req.body[f]);
+      const v = req.body[f]
+      params.push(
+        f === 'skills_gaps'               ? JSON.stringify(v) :
+        f === 'is_remote' || f === 'is_hybrid' ? (v ? 1 : 0) :
+        v
+      );
     }
   }
   if (!updates.length) return res.json({ ok: true });

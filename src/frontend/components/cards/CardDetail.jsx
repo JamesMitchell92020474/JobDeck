@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import AddJobModal from './AddJobModal'
 import { useApp } from '../../context/AppContext'
 import Icon from '../ui/Icon'
 import api from '../../hooks/useApi'
@@ -25,6 +26,7 @@ export default function CardDetail({ jobId, setRoute }) {
   const [fileCount, setFileCount] = useState(0)
   const [descFetching, setDescFetching] = useState(false)
   const [descError,    setDescError]    = useState(null)
+  const [editing,      setEditing]      = useState(false)
 
   const fetchDescription = async (jobId) => {
     setDescFetching(true)
@@ -68,6 +70,7 @@ export default function CardDetail({ jobId, setRoute }) {
   const tabCounts = { Chat: chatCount || undefined, Files: fileCount || undefined }
 
   return (
+    <>
     <div className="detail">
       {/* LEFT: context panel */}
       <aside className="detail-aside">
@@ -158,14 +161,17 @@ export default function CardDetail({ jobId, setRoute }) {
             </div>
           ))}
           <div className="flex-1" />
-          {job.source_url && (
-            <div style={{ display: 'flex', alignItems: 'center', padding: '10px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 0' }}>
+            <button className="btn btn-accent btn-sm" onClick={() => setEditing(true)}>
+              <Icon name="edit" size={11} /> Edit job
+            </button>
+            {job.source_url && (
               <a href={job.source_url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>
                 <Icon name="external" size={11} />
                 View on {job.source || 'site'}
               </a>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="tab-body">
@@ -177,5 +183,14 @@ export default function CardDetail({ jobId, setRoute }) {
         </div>
       </div>
     </div>
+
+    {editing && (
+      <AddJobModal
+        initialJob={job}
+        onSaved={updated => { setJob(updated); setJobs(prev => prev.map(j => j.id === updated.id ? updated : j)); setEditing(false) }}
+        onCancel={() => setEditing(false)}
+      />
+    )}
+    </>
   )
 }

@@ -12,14 +12,30 @@ const EMPTY = {
   deadline: '', is_remote: false, is_hybrid: false, job_category: '',
 }
 
-export default function AddJobModal({ initialStatus, onSaved, onCancel }) {
+export default function AddJobModal({ initialStatus, initialJob, onSaved, onCancel }) {
+  const isEdit = !!initialJob
   const { settings } = useApp()
   const categories = [
     { value: '', label: 'Auto-detect' },
     { value: 'tech', label: settings.cv_label_1 || 'CV Profile 1' },
     { value: 'hospitality', label: settings.cv_label_2 || 'CV Profile 2' },
   ]
-  const [form, setForm]     = useState(EMPTY)
+  const [form, setForm]     = useState(() => isEdit ? {
+    title:        initialJob.title        || '',
+    company:      initialJob.company      || '',
+    location:     initialJob.location     || '',
+    source:       initialJob.source       || 'Manual',
+    source_url:   initialJob.source_url   || '',
+    description:  (initialJob.description || '').replace(/<[^>]+>/g, '').replace(/\n{3,}/g, '\n\n').trim(),
+    salary:       initialJob.salary       || '',
+    job_type:     initialJob.job_type     || '',
+    posting_date: initialJob.posting_date || '',
+    expiry_date:  initialJob.expiry_date  || '',
+    deadline:     initialJob.deadline     || '',
+    is_remote:    !!initialJob.is_remote,
+    is_hybrid:    !!initialJob.is_hybrid,
+    job_category: initialJob.job_category || '',
+  } : EMPTY)
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
 
@@ -31,7 +47,12 @@ export default function AddJobModal({ initialStatus, onSaved, onCancel }) {
     setSaving(true)
     setError(null)
     try {
-      const job = await api.post('/jobs', { ...form, status: initialStatus })
+      let job
+      if (isEdit) {
+        job = await api.put(`/jobs/${initialJob.id}`, form)
+      } else {
+        job = await api.post('/jobs', { ...form, status: initialStatus })
+      }
       onSaved(job)
     } catch (err) {
       setError(err?.message || 'Failed to save job')
@@ -43,7 +64,7 @@ export default function AddJobModal({ initialStatus, onSaved, onCancel }) {
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onCancel()}>
       <div className="modal-panel">
         <div className="modal-header">
-          <h2 style={{ margin: 0, fontSize: 18 }}>Add job to {initialStatus}</h2>
+          <h2 style={{ margin: 0, fontSize: 18 }}>{isEdit ? `Edit — ${initialJob.title}` : `Add job to ${initialStatus}`}</h2>
           <button className="btn btn-ghost btn-sm" onClick={onCancel} style={{ padding: '4px 8px' }}>
             <Icon name="close" size={14} />
           </button>
@@ -152,7 +173,7 @@ export default function AddJobModal({ initialStatus, onSaved, onCancel }) {
           <div className="modal-footer">
             <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button>
             <button type="submit" className="btn btn-accent" disabled={saving}>
-              {saving ? <><span className="spinner" /> Saving…</> : 'Add job'}
+              {saving ? <><span className="spinner" /> Saving…</> : isEdit ? 'Save changes' : 'Add job'}
             </button>
           </div>
         </form>
