@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors,
 } from '@dnd-kit/core'
@@ -13,14 +13,15 @@ import api from '../../hooks/useApi'
 const COLUMNS = ['New', 'Interested', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived']
 const COL_VAR = { New: 'new', Interested: 'interested', Applied: 'applied', Interview: 'interview', Offer: 'offer', Rejected: 'rejected', Archived: 'archived' }
 
-export default function KanbanBoard({ setRoute, setDetailJobId }) {
-  const { jobs, setJobs, settings, getSourceColors } = useApp()
-  const [query,       setQuery]       = useState('')
-  const [srcFilter,   setSrcFilter]   = useState('All')
-  const [catFilter,   setCatFilter]   = useState('All')
-  const [typeFilter,  setTypeFilter]  = useState('All')
-  const [sortBy,      setSortBy]      = useState('added')
-  const [sortDir,     setSortDir]     = useState('desc')
+export default function KanbanBoard({
+  setRoute, setDetailJobId,
+  query, setQuery, srcFilter, setSrcFilter,
+  catFilter, setCatFilter, typeFilter, setTypeFilter,
+  sortBy, setSortBy, sortDir, setSortDir,
+}) {
+  const { jobs, setJobs, loadJobs, settings, getSourceColors } = useApp()
+
+  useEffect(() => { loadJobs() }, [])
   const [activeId,      setActiveId]      = useState(null)
   const [addingToCol,   setAddingToCol]   = useState(null)
   const [filteringNew,  setFilteringNew]  = useState(false)

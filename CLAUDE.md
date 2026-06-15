@@ -451,6 +451,10 @@ Filter chips above the kanban (all frontend-only, no DB queries):
 Sort dropdown: Title / Company / Date added / Date posted / Deadline / Score, with asc/desc toggle.
 Nulls always sort to the bottom regardless of direction.
 
+**State persistence** — filter/sort state is lifted to `AppInner` in `App.jsx` and passed as props to `KanbanBoard`. Navigating to a job detail and back restores the same query, filters, and sort.
+
+**Fresh data on mount** — `KanbanBoard` calls `loadJobs()` in a `useEffect` on mount. This picks up any fit scores written by background processes (scraper post-fetch scoring, AI filter) since the app loaded, so cards always show their current score without a full page refresh. Opening a job's detail page also syncs the fresh DB data back into the global `jobs` state via `setJobs`.
+
 ### Job type normalisation
 
 `normaliseJobType()` in `fetchDescription.js` (shared) maps Seek's inconsistent labels to:

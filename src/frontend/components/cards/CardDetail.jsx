@@ -44,6 +44,7 @@ export default function CardDetail({ jobId, setRoute }) {
     if (!jobId) return
     api.get(`/jobs/${jobId}`).then(data => {
       setJob(data)
+      setJobs(prev => prev.map(j => j.id === data.id ? { ...j, ...data } : j))
       setFileCount(data.files?.length || 0)
       if (!data.description && data.source_url) fetchDescription(jobId)
     }).catch(() => setRoute('board'))

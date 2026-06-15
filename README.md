@@ -13,6 +13,7 @@ AI-powered job search dashboard. Scrapes Seek and Trade Me Jobs, scores listings
 - Playwright scraper for Seek and Trade Me Jobs (manual sync or optional startup auto-sync)
 - Full description fetch per job — extracts salary, job type, and posting date
 - Exclude keywords per CV profile — jobs matching excluded terms in title or description are silently skipped
+- Board filter and sort state persists when navigating to a job and back
 
 **AI chat**
 - Global chat with named session history — discuss your whole job search with Claude

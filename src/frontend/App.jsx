@@ -17,6 +17,13 @@ function AppInner() {
   const [addingJob,   setAddingJob]   = useState(false)
   const { setJobs } = useApp()
 
+  const [boardQuery,      setBoardQuery]      = useState('')
+  const [boardSrcFilter,  setBoardSrcFilter]  = useState('All')
+  const [boardCatFilter,  setBoardCatFilter]  = useState('All')
+  const [boardTypeFilter, setBoardTypeFilter] = useState('All')
+  const [boardSortBy,     setBoardSortBy]     = useState('added')
+  const [boardSortDir,    setBoardSortDir]    = useState('desc')
+
   const navigate = (r) => setRoute(r)
 
   const openDetail = (id) => {
@@ -40,7 +47,16 @@ function AppInner() {
           <Dashboard setRoute={navigate} setDetailJobId={openDetail} onNewJob={() => setAddingJob(true)} />
         )}
         {route === 'board' && (
-          <Board setRoute={navigate} setDetailJobId={openDetail} />
+          <Board
+            setRoute={navigate}
+            setDetailJobId={openDetail}
+            query={boardQuery}           setQuery={setBoardQuery}
+            srcFilter={boardSrcFilter}   setSrcFilter={setBoardSrcFilter}
+            catFilter={boardCatFilter}   setCatFilter={setBoardCatFilter}
+            typeFilter={boardTypeFilter} setTypeFilter={setBoardTypeFilter}
+            sortBy={boardSortBy}         setSortBy={setBoardSortBy}
+            sortDir={boardSortDir}       setSortDir={setBoardSortDir}
+          />
         )}
         {route === 'detail' && detailJobId && (
           <CardDetail jobId={detailJobId} setRoute={navigate} />
