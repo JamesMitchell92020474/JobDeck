@@ -33,7 +33,7 @@ export default function CardDetail({ jobId, setRoute }) {
     setDescError(null)
     try {
       const res = await api.post(`/jobs/${jobId}/fetch-description`)
-      setJob(prev => ({ ...prev, description: res.description, logo_url: res.logoUrl || prev.logo_url }))
+      setJob(prev => ({ ...prev, description: res.description, logo_url: res.logoUrl || prev.logo_url, company_url: res.companyUrl || prev.company_url }))
     } catch (err) {
       setDescError(err?.message || 'Could not fetch description')
     }
@@ -123,6 +123,16 @@ export default function CardDetail({ jobId, setRoute }) {
               <div className="v mono" style={{ wordBreak: 'break-all', fontSize: 11 }}>
                 <a href={job.source_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
                   {job.source_url}
+                </a>
+              </div>
+            </div>
+          )}
+          {job.company_url && (
+            <div style={{ gridColumn: '1/-1' }}>
+              <div className="k">Company website</div>
+              <div className="v mono" style={{ wordBreak: 'break-all', fontSize: 11 }}>
+                <a href={job.company_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+                  {job.company_url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
                 </a>
               </div>
             </div>

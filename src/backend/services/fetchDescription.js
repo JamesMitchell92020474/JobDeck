@@ -178,22 +178,36 @@ async function fetchDescriptionPage(context, url) {
                      scope.querySelector('img[src*="company"]');
       const logoUrl = logoEl?.src || '';
 
+      const pageHost = location.hostname;
+      const companyLinkEl =
+        scope.querySelector('[data-automation*="company-website"] a, [data-automation*="companyWebsite"] a') ||
+        [...scope.querySelectorAll('a[href^="http"]')].find(a => {
+          try {
+            const h = new URL(a.href).hostname;
+            return h !== pageHost && !h.endsWith('seek.co.nz') && !h.endsWith('seek.com.au') &&
+                   !h.endsWith('trademe.co.nz') && !h.endsWith('linkedin.com') &&
+                   !h.endsWith('facebook.com') && !h.endsWith('instagram.com') &&
+                   !h.endsWith('twitter.com') && !h.endsWith('x.com');
+          } catch { return false; }
+        });
+      const companyUrl = companyLinkEl?.href || '';
+
       const seekDesc = document.querySelector('[data-automation="jobAdDetails"]') ||
                        document.querySelector('[data-automation="job-detail-page-job-description"]');
-      if (seekDesc) return { html: cleanEl(seekDesc), logoUrl, postingDate, jobType, salary };
+      if (seekDesc) return { html: cleanEl(seekDesc), logoUrl, companyUrl, postingDate, jobType, salary };
 
       const tmDesc = document.querySelector('.tm-markdown') ||
                      document.querySelector('[class*="job-description"]');
-      if (tmDesc) return { html: cleanEl(tmDesc), logoUrl, postingDate, jobType, salary };
+      if (tmDesc) return { html: cleanEl(tmDesc), logoUrl, companyUrl, postingDate, jobType, salary };
 
       const generic = document.querySelector('#jobDescriptionText') ||
                       document.querySelector('[class*="description"]') ||
                       document.querySelector('[class*="job-body"]') ||
                       document.querySelector('article') ||
                       document.querySelector('main');
-      if (!generic) return { html: '', logoUrl, postingDate, jobType, salary };
+      if (!generic) return { html: '', logoUrl, companyUrl, postingDate, jobType, salary };
       const html = cleanEl(generic);
-      return { html: html.length > 12000 ? html.slice(0, 12000) : html, logoUrl, postingDate, jobType, salary };
+      return { html: html.length > 12000 ? html.slice(0, 12000) : html, logoUrl, companyUrl, postingDate, jobType, salary };
     });
   } finally {
     await page.close();

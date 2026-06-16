@@ -405,11 +405,13 @@ async function fetchDescriptionsForNewJobs(context, newJobs) {
 
       const jobType = normaliseJobType(result.jobType || '');
       db.prepare(`UPDATE jobs SET description = ?, logo_url = ?,
+        ${result.companyUrl ? 'company_url = ?,' : ''}
         ${result.postingDate ? 'posting_date = ?,' : ''}
         ${jobType && !job.job_type ? 'job_type = ?,' : ''}
         salary = ?, updated_at = datetime('now') WHERE id = ?`)
         .run(
           result.html, result.logoUrl || '',
+          ...(result.companyUrl ? [result.companyUrl] : []),
           ...(result.postingDate ? [result.postingDate] : []),
           ...(jobType && !job.job_type ? [jobType] : []),
           result.salary || '', job.id

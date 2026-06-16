@@ -11,7 +11,7 @@ AI-powered job search dashboard. Scrapes Seek and Trade Me Jobs, scores listings
 - AI fit scoring (0–100) against your CV with second-person summary and skills gaps
 - One-click AI filter — scores all unscored active jobs, archives poor fits from the New column (configurable threshold)
 - Playwright scraper for Seek and Trade Me Jobs (manual sync or optional startup auto-sync)
-- Full description fetch per job — extracts salary, job type, and posting date
+- Full description fetch per job — extracts salary, job type, posting date, and company website URL (shown on the job detail page when available)
 - Exclude keywords per CV profile — jobs matching excluded terms in title or description are silently skipped
 - Board filter and sort state persists when navigating to a job and back
 

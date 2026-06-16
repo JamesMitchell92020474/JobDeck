@@ -100,6 +100,7 @@ function getDb() {
   try { db.exec('ALTER TABLE jobs ADD COLUMN description_summary TEXT') } catch {}
   try { db.exec('ALTER TABLE jobs ADD COLUMN cover_letter_settings TEXT') } catch {}
   try { db.exec('ALTER TABLE activity_logs ADD COLUMN job_id INTEGER') } catch {}
+  try { db.exec('ALTER TABLE jobs ADD COLUMN company_url TEXT') } catch {}
 
   // One-time migration: move all existing global chat messages into a single
   // named session, so they're not orphaned when the sessions feature is added.

@@ -92,7 +92,7 @@ All settings are key-value pairs in the `settings` table.
 Migrations run in `database.js` via `try { db.exec('ALTER TABLE...') } catch {}` — add new columns there.
 
 Key schema additions (beyond initial schema):
-- `jobs.logo_url`, `jobs.job_category`, `jobs.description_summary` — added via migrations
+- `jobs.logo_url`, `jobs.job_category`, `jobs.description_summary`, `jobs.company_url` — added via migrations
 - `jobs.cover_letter_settings TEXT` — JSON per-job page layout (margins, font, page size, letterhead toggle, active profile)
 - `job_chat.mode TEXT DEFAULT 'chat'` — separates regular chat from interview history
 - `job_chat.answer_meta TEXT` — JSON metadata per interview answer (duration, wordCount, fillerWords)
@@ -234,10 +234,10 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | GET | /api/stats/welcome | AI-generated welcome message |
 | GET/POST | /api/jobs | List / create jobs |
 | POST | /api/jobs/filter-new | Score all unscored active jobs; archive New jobs below threshold (reads `ai_filter_threshold`) |
-| GET/PUT/DELETE | /api/jobs/:id | Single job CRUD. PUT accepts: title, company, location, source, source_url, description, salary, job_type, posting_date, expiry_date, is_remote (bool→int), is_hybrid (bool→int), deadline, notes, status, fit_score, ai_summary, skills_gaps, job_category, cover_letter_settings |
+| GET/PUT/DELETE | /api/jobs/:id | Single job CRUD. PUT accepts: title, company, location, source, source_url, description, salary, job_type, posting_date, expiry_date, is_remote (bool→int), is_hybrid (bool→int), deadline, notes, status, fit_score, ai_summary, skills_gaps, job_category, cover_letter_settings, company_url |
 | PUT | /api/jobs/:id/move | Move to kanban column |
 | POST | /api/jobs/:id/ai-score | Score job against CV |
-| POST | /api/jobs/:id/fetch-description | Scrape description, logo, posting_date, job_type, salary from source_url; auto-scores in background |
+| POST | /api/jobs/:id/fetch-description | Scrape description, logo, company_url, posting_date, job_type, salary from source_url; auto-scores in background |
 | GET | /api/jobs/:id/chat-context | Returns `{ cvText }` for the job — fetched once by the frontend on card open |
 | GET/POST | /api/jobs/:id/chat | Per-card Claude chat (`?mode=chat\|interview`; POST body includes `{ mode, cvText }`) |
 | POST | /api/jobs/:id/cover-letter | Generate cover letter |
@@ -430,6 +430,7 @@ and `normaliseJobType(raw)`.
 `POST /api/jobs/:id/fetch-description` — launches Playwright, visits `source_url`, extracts:
 - Description HTML (cleaned: keeps p/ul/ol/li/strong/em/h1-h4/a; block elements converted to `<p>` before stripping)
 - Company logo URL (scoped to job header element to avoid picking up featured job logos)
+- Company website URL (first external link in the job header that isn't seek/trademe/social media; stored in `jobs.company_url`; shown in the detail aside if present)
 - Posting date (prefers `datetime` attribute on `<time>` elements; converts "Xd ago" to real date)
 - Job type (normalised via `normaliseJobType()`)
 - Salary (only stored if value contains a dollar figure or salary range; benefits text discarded)

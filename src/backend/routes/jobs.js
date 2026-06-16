@@ -188,7 +188,7 @@ router.get('/:id', (req, res) => {
 router.put('/:id', (req, res) => {
   const fields = ['title','company','location','source','source_url','description','salary','job_type',
     'posting_date','expiry_date','is_remote','is_hybrid',
-    'deadline','calendar_reminder','notes','cover_letter','cover_letter_settings','status','fit_score','ai_summary','skills_gaps','job_category'];
+    'deadline','calendar_reminder','notes','cover_letter','cover_letter_settings','status','fit_score','ai_summary','skills_gaps','job_category','company_url'];
   const updates = [];
   const params = [];
   for (const f of fields) {
@@ -488,6 +488,7 @@ router.post('/:id/fetch-description', async (req, res) => {
 
   let description = '';
   let logoUrl     = '';
+  let companyUrl  = '';
   let postingDate = '';
   let jobType     = '';
   let salary      = '';
@@ -500,6 +501,7 @@ router.post('/:id/fetch-description', async (req, res) => {
       const result = await fetchDescriptionPage(context, job.source_url);
       description = result.html;
       logoUrl     = result.logoUrl || '';
+      companyUrl  = result.companyUrl || '';
       postingDate = result.postingDate || '';
       jobType     = normaliseJobType(result.jobType || '');
       salary      = result.salary || '';
@@ -514,12 +516,14 @@ router.post('/:id/fetch-description', async (req, res) => {
 
   const db2 = getDb();
   db2.prepare(`UPDATE jobs SET description = ?, logo_url = ?,
+    ${companyUrl ? 'company_url = ?,' : ''}
     ${postingDate ? 'posting_date = ?,' : ''}
     ${jobType && !job.job_type ? 'job_type = ?,' : ''}
     salary = ?,
     updated_at = datetime('now') WHERE id = ?`)
     .run(
       description, logoUrl,
+      ...(companyUrl ? [companyUrl] : []),
       ...(postingDate ? [postingDate] : []),
       ...(jobType && !job.job_type ? [jobType] : []),
       salary,
@@ -551,7 +555,7 @@ router.post('/:id/fetch-description', async (req, res) => {
     );
   }).catch(() => {});
 
-  res.json({ ok: true, description, logoUrl });
+  res.json({ ok: true, description, logoUrl, companyUrl });
 });
 
 // GET /api/jobs/:id/files/:fileId/serve — serve file inline or as download
