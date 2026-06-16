@@ -199,8 +199,8 @@ top of the Overview tab. Not shown in the sidebar.
 
 ## AI models
 
-- Standard: `claude-sonnet-4-20250514`
-- Deep Analysis (user-triggered in global Chat): `claude-opus-4-20250514`
+- Standard: `claude-sonnet-4-6`
+- Deep Analysis (user-triggered in global Chat): `claude-opus-4-8`
 - All AI code: `src/backend/services/ai.js`
 
 API key loaded from `ANTHROPIC_API_KEY` env var, falls back to `api_key` DB setting.

@@ -20,8 +20,8 @@ function userName() {
 
 // The two Claude model IDs used across the app.
 // Sonnet is faster and cheaper; Opus is more powerful and used for deep analysis.
-const SONNET = 'claude-sonnet-4-20250514';
-const OPUS   = 'claude-opus-4-20250514';
+const SONNET = 'claude-sonnet-4-6';
+const OPUS   = 'claude-opus-4-8';
 
 // A simple helper that sends a single message to Claude and returns the text reply.
 // Used by functions that don't need a back-and-forth conversation history.
