@@ -238,8 +238,8 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | PUT | /api/jobs/:id/move | Move to kanban column |
 | POST | /api/jobs/:id/ai-score | Score job against CV |
 | POST | /api/jobs/:id/fetch-description | Scrape description, logo, company_url, posting_date, job_type, salary from source_url; auto-scores in background |
-| GET | /api/jobs/:id/chat-context | Returns `{ cvText }` for the job — fetched once by the frontend on card open |
-| GET/POST | /api/jobs/:id/chat | Per-card Claude chat (`?mode=chat\|interview`; POST body includes `{ mode, cvText }`) |
+| GET | /api/jobs/:id/chat-context | Returns `{ cvText, filesContext }` for the job — fetched once by the frontend on card open |
+| GET/POST | /api/jobs/:id/chat | Per-card Claude chat (`?mode=chat\|interview`; POST body includes `{ mode, cvText }`). On each POST the backend reads attached files server-side and injects their text into the AI system prompt. |
 | POST | /api/jobs/:id/cover-letter | Generate cover letter |
 | POST | /api/jobs/:id/export-pdf | Export cover letter as PDF — body: `{ html, settings }`. Applies page margins, fonts, letterhead from `settings`; falls back to `jobs.cover_letter_settings`. Playwright-based, saves to uploads/cover-letters/ |
 | POST | /api/jobs/:id/export-word | Export as .docx — body: `{ html, settings }`. Proper HTML→docx parser (bold/italic/underline/headings/lists/colours/fonts). Same settings merge as PDF export |
@@ -323,7 +323,7 @@ Chat history is scoped by `mode` column on `job_chat`:
 - `mode = 'chat'` — regular Q&A (default)
 - `mode = 'interview'` — mock interview mode, separate history, uses `interviewChat()` system prompt
 
-The frontend fetches `GET /api/jobs/:id/chat-context` once on card open and passes `cvText` with every POST, avoiding repeated settings lookups.
+The frontend fetches `GET /api/jobs/:id/chat-context` once per job on card open and passes `cvText` with every POST. On every `POST /api/jobs/:id/chat`, the backend also reads all files attached to the job and injects their text into the AI system prompt — so Claude can reference position briefs, questionnaires, or any other documents the user has attached. Extraction is handled by `extractFileText()` in `jobs.js`, which supports PDF (`pdf-parse`), Word docs (`mammoth` — `.docx`/`.doc`), and plain text files. Per-file cap: 15,000 chars; total cap: 30,000 chars.
 
 **Mock interview mode** — toggled via accent-coloured "Mock Interview" button in the chat tab header. 15 questions, no mid-interview feedback, professional closing, full written assessment at the end. An "Opus" toggle appears in the regular chat footer (when `deep_analysis = '1'`) to switch to the more powerful model for a session. Per-answer metadata tracked on the frontend (duration, word count, filler words via regex) and stored in `job_chat.answer_meta` (JSON). Backend prepends a formatted metadata header to each user message when building Claude's context. Auto-begins on first ever use; returns to an empty state after that so the user chooses when to start again. Completed interviews saved to `job_interview_runs` (transcript as plain text) via "Save Interview" button; past runs viewable/deletable in a collapsible panel.
 
@@ -332,14 +332,17 @@ Shared hook used by both `Chat.jsx` and `ChatTab.jsx`.
 
 - **Voice mode toggle** — clicking the mic button once enters continuous voice mode (mic auto-restarts after every response). Clicking again exits.
 - **Auto-enable on interview** — entering mock interview mode auto-enables both voice and TTS (if supported). Exiting turns voice off.
-- **Mic starts via TTS onEnd** — in interview mode, the mic only opens after TTS finishes reading the question, preventing the mic from picking up TTS audio or firing `no-speech` prematurely. If TTS is off, falls back to a 200ms delay.
+- **Mic auto-starts after question** — in interview mode, the mic opens automatically 500ms after an interviewer question appears. TTS plays in parallel; the mic does not wait for TTS to finish. The `pauseBeforeSend: 2500` silence threshold prevents the mic accidentally sending TTS audio as a user answer.
 - **Assessment detection** — assistant messages over 500 characters are treated as the final assessment; the mic is stopped immediately when the message arrives (before TTS reads it), and voice mode is fully disabled.
 - **Regular chat is one-shot** — voice mode turns off after each send; no auto-restart. The speaker button also stops the mic when clicked while voice is active.
 - **Extended listening** — in interview mode, `startListening` uses `{ pauseBeforeSend: 2500 }`: continuous recognition, submits only after 2.5 seconds of silence, preventing premature sends mid-thought.
 - **TTS pauses**: `speak()` splits text on paragraph/bullet breaks and speaks each chunk as a separate `SpeechSynthesisUtterance` with a 350ms gap. Uses a `ttsChainRef` Symbol for clean cancellation.
+- **Unmount cleanup** — `useSpeech` sets `cancelRef.current = true` and nulls all recognition handlers on unmount, preventing the mic restart loop from continuing after the user navigates away from the chat page.
+- **Transient error retry** — `onerror` retries via `onNaturalEnd` for all errors except `not-allowed` and `audio-capture` (which are permanent). Network/service errors retry after 1.5s.
 - **Enter to send** — both chat UIs use Enter to send, Shift+Enter for new line.
-- `startListening(onTranscript, onNaturalEnd?, options?)` — `options.pauseBeforeSend` (ms) enables continuous mode with silence-based submission. `no-speech` treated as natural end.
+- `startListening(onTranscript, onNaturalEnd?, options?)` — `options.pauseBeforeSend` (ms) enables continuous mode with silence-based submission. Cleans up any existing recognition instance before starting a new one.
 - `cancelRef` distinguishes user-cancelled from natural timeout; `ttsChainRef` cancels queued TTS utterances.
+- **Browser support** — requires Google Chrome (or a Chromium build with Google's speech API). Brave and ungoogled Chromium builds block the speech recognition service; the mic will open but never transcribe.
 
 ## Kanban columns
 

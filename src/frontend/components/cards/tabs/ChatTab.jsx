@@ -59,6 +59,7 @@ export default function ChatTab({ job, onCountChange }) {
   const sendTextRef        = useRef(null)
   const callbackRef        = useRef(null)
   const questionTimestamp  = useRef(null)  // when the last interviewer question appeared
+  const voiceStartTimerRef = useRef(null)  // pending auto-start timer after a question arrives
 
   const mode = interviewMode ? 'interview' : 'chat'
   const { listening, ttsEnabled, setTtsEnabled, startListening, stopListening, speak, stopSpeaking, supported } = useSpeech()
@@ -107,13 +108,17 @@ export default function ChatTab({ job, onCountChange }) {
     // Treat long responses as the final assessment — stop voice mode after reading
     const isAssessment = inInterviewVoice && last.content.length > 500
 
+    prevCountRef.current = messages.length
+
     if (inInterviewVoice && !isAssessment) {
-      // Start mic when TTS finishes (prevents mic picking up TTS audio).
-      // If TTS is off, fall back to a short delay.
-      speak(last.content, () => { if (voiceRef.current) setTimeout(startVoice, 300) })
-      if (!ttsEnabled) {
-        const t = setTimeout(startVoice, 200)
-        return () => clearTimeout(t)
+      speak(last.content)
+      voiceStartTimerRef.current = setTimeout(() => {
+        voiceStartTimerRef.current = null
+        if (voiceRef.current) startVoice()
+      }, 500)
+      return () => {
+        clearTimeout(voiceStartTimerRef.current)
+        voiceStartTimerRef.current = null
       }
     } else {
       speak(last.content)
@@ -123,7 +128,6 @@ export default function ChatTab({ job, onCountChange }) {
         stopListening()
       }
     }
-    prevCountRef.current = messages.length
   }, [messages]) // eslint-disable-line
 
   const sendText = async (text) => {
@@ -154,7 +158,6 @@ export default function ChatTab({ job, onCountChange }) {
     setError('')
     questionTimestamp.current = null
 
-    if (!cvText) api.get(`/jobs/${job.id}/chat-context`).then(r => setCvText(r.cvText)).catch(() => {})
     if (mode === 'interview') {
       api.get(`/jobs/${job.id}/interview-runs`).then(loaded => {
         setRuns(loaded)
@@ -176,6 +179,20 @@ export default function ChatTab({ job, onCountChange }) {
     return () => { cancelled = true }
   }, [job.id, mode]) // eslint-disable-line
 
+  useEffect(() => {
+    return () => {
+      voiceRef.current = false
+      clearTimeout(voiceStartTimerRef.current)
+      voiceStartTimerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    api.get(`/jobs/${job.id}/chat-context`)
+      .then(r => setCvText(r.cvText))
+      .catch(() => {})
+  }, [job.id]) // eslint-disable-line
+
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   const send = () => {
@@ -193,6 +210,8 @@ export default function ChatTab({ job, onCountChange }) {
       stopSpeaking()
       setDraft('')
     } else {
+      clearTimeout(voiceStartTimerRef.current)
+      voiceStartTimerRef.current = null
       voiceRef.current = true
       setVoiceMode(true)
       if (!ttsEnabled) setTtsEnabled(true)

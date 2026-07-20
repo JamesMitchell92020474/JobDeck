@@ -26,8 +26,14 @@ export function useSpeech() {
 
   useEffect(() => {
     return () => {
+      cancelRef.current = true  // prevent onend from restarting after unmount
       clearTimeout(pauseTimerRef.current)
-      recRef.current?.stop()
+      if (recRef.current) {
+        recRef.current.onend = null
+        recRef.current.onerror = null
+        try { recRef.current.stop() } catch {}
+        recRef.current = null
+      }
       window.speechSynthesis?.cancel()
     }
   }, [])
@@ -40,6 +46,15 @@ export function useSpeech() {
   const startListening = useCallback((onTranscript, onNaturalEnd, options = {}) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) return
+
+    // Clean up any existing recognition so its stale handlers don't interfere
+    if (recRef.current) {
+      recRef.current.onend = null
+      recRef.current.onerror = null
+      recRef.current.onresult = null
+      try { recRef.current.stop() } catch {}
+      recRef.current = null
+    }
 
     cancelRef.current = false
     clearTimeout(pauseTimerRef.current)
@@ -80,15 +95,16 @@ export function useSpeech() {
     }
 
     rec.onerror = (e) => {
+      rec.onend = null  // prevent double-restart if onend fires after onerror
       clearTimeout(pauseTimerRef.current)
-      if (e.error === 'no-speech') {
-        // Silence timeout — treat as natural end so voice mode can restart
-        setListening(false)
-        if (!cancelRef.current) onNaturalEnd?.()
-      } else {
-        // Real error (permission denied, no mic) — stop the loop
+      setListening(false)
+      if (cancelRef.current) return
+      if (e.error === 'not-allowed' || e.error === 'audio-capture') {
+        // Permanent: mic permission denied or no microphone hardware
         cancelRef.current = true
-        setListening(false)
+      } else {
+        // Transient error (network, no-speech, service unavailable, etc.) — retry
+        setTimeout(() => { if (!cancelRef.current) onNaturalEnd?.() }, e.error === 'no-speech' ? 0 : 1500)
       }
     }
 
@@ -100,7 +116,12 @@ export function useSpeech() {
   const stopListening = useCallback(() => {
     cancelRef.current = true
     clearTimeout(pauseTimerRef.current)
-    recRef.current?.stop()
+    if (recRef.current) {
+      recRef.current.onend = null
+      recRef.current.onerror = null
+      try { recRef.current.stop() } catch {}
+      recRef.current = null
+    }
     setListening(false)
   }, [])
 
@@ -128,10 +149,9 @@ export function useSpeech() {
       if (ttsChainRef.current !== chainId) return
       if (i >= chunks.length) { onEnd?.(); return }
       const utt = new SpeechSynthesisUtterance(chunks[i++])
-      utt.lang  = 'en-NZ'
-      utt.onend = () => {
-        if (ttsChainRef.current === chainId) setTimeout(speakNext, 350)
-      }
+      utt.lang    = 'en-NZ'
+      utt.onend   = () => { if (ttsChainRef.current === chainId) setTimeout(speakNext, 350) }
+      utt.onerror = () => { if (ttsChainRef.current === chainId) setTimeout(speakNext, 350) }
       window.speechSynthesis.speak(utt)
     }
     speakNext()

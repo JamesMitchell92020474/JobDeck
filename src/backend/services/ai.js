@@ -120,14 +120,15 @@ Write the cover letter as plain text. No subject line. Start with the salutation
 // "messages" is the full conversation history so Claude remembers earlier turns.
 // The job description and CV are included in the system prompt so Claude has
 // context about what role is being discussed.
-async function jobChat(messages, job, cvText, { deep = false } = {}) {
+async function jobChat(messages, job, cvText, { deep = false, filesContext = null } = {}) {
   const client = getClient();
   const name   = userName();
   const model  = (deep && getSetting('deep_analysis') === '1') ? OPUS : SONNET;
+  const fileSection = filesContext ? `\n\nThe user has attached the following files to this job listing — treat them as part of your context:\n${filesContext}` : '';
   const system = `You are helping ${name} prepare for a job application.
 Role: ${job.title} at ${job.company}.
 Job description: ${(job.description || '').slice(0, 2000)}
-CV summary: ${(cvText || '').slice(0, 2000)}
+CV summary: ${(cvText || '').slice(0, 2000)}${fileSection}
 Be concise, specific, and practically useful.`;
 
   const res = await client.messages.create({
@@ -150,7 +151,7 @@ Be concise, specific, and practically useful.`;
 //
 // Each user message may include a metadata header like "[Answer: 45s | 120 words]"
 // which Claude uses in the final Communication Style section of the assessment.
-async function interviewChat(messages, job, cvText) {
+async function interviewChat(messages, job, cvText, filesContext = null) {
   const client = getClient();
   const name   = userName();
   const system = `You are conducting a realistic mock job interview for ${name}, who is applying for ${job.title} at ${job.company}.
@@ -181,7 +182,7 @@ Three numbered, concrete tips personalised to this candidate's specific strength
 ANSWER METADATA: Each candidate message may begin with a header like "[Answer: 1m 12s | 95 words | Filler words: "um" x4, "like" x2]". Use this data to inform the Communication Style section of your assessment, but do not reference or comment on it during the interview itself — only in the final assessment.
 
 Job description: ${(job.description || '').slice(0, 2000)}
-Candidate CV: ${(cvText || '').slice(0, 2000)}`;
+Candidate CV: ${(cvText || '').slice(0, 2000)}${filesContext ? `\n\nThe user has attached the following files to this job listing — use them when drawing interview questions:\n${filesContext}` : ''}`;
 
   const res = await client.messages.create({
     model: SONNET,

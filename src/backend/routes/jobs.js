@@ -251,14 +251,56 @@ router.get('/:id/activity', (req, res) => {
   res.json(getLogs({ jobId: parseInt(req.params.id), limit: 50 }));
 });
 
+// Extracts readable text from an attached file. Supports PDFs and plain text.
+// Returns null for binary files (images, Word docs, etc.) that can't be read as text.
+async function extractFileText(file) {
+  try {
+    if (file.file_type === 'application/pdf') {
+      const pdfParse = require('pdf-parse');
+      const buf = fs.readFileSync(file.file_path);
+      const parsed = await pdfParse(buf);
+      return parsed.text?.trim() || null;
+    }
+    if (file.file_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        file.file_type === 'application/msword' ||
+        file.original_name?.match(/\.docx?$/i)) {
+      const mammoth = require('mammoth');
+      const result  = await mammoth.extractRawText({ path: file.file_path });
+      return result.value?.trim() || null;
+    }
+    if (file.file_type?.startsWith('text/')) {
+      return fs.readFileSync(file.file_path, 'utf8').trim() || null;
+    }
+  } catch {}
+  return null;
+}
+
 // GET /api/jobs/:id/chat-context
-// Returns the CV text for a specific job. The frontend calls this once when a job card
-// is opened and then passes the CV text with every subsequent chat message, avoiding
-// repeated database reads.
-router.get('/:id/chat-context', (req, res) => {
-  const job = getDb().prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
+// Returns the CV text and any readable attached file contents for a job. The frontend
+// calls this once when a job card is opened and passes both with every subsequent
+// chat message, avoiding repeated database reads.
+router.get('/:id/chat-context', async (req, res) => {
+  const db  = getDb();
+  const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
   if (!job) return res.status(404).json({ error: 'Not found' });
-  res.json({ cvText: cvForJob(job) });
+
+  // Extract text from attached files, skipping unreadable types (images, Word docs, etc.)
+  const files = db.prepare('SELECT * FROM job_files WHERE job_id = ? ORDER BY created_at ASC').all(req.params.id);
+  const PER_FILE_LIMIT = 15000;
+  const TOTAL_LIMIT    = 30000;
+  let totalChars = 0;
+  const fileSections = [];
+  for (const file of files) {
+    if (totalChars >= TOTAL_LIMIT) break;
+    const text = await extractFileText(file);
+    if (!text) continue;
+    const chunk = text.slice(0, Math.min(PER_FILE_LIMIT, TOTAL_LIMIT - totalChars));
+    fileSections.push(`[File: ${file.original_name}]\n${chunk}`);
+    totalChars += chunk.length;
+  }
+  const filesContext = fileSections.length ? fileSections.join('\n\n') : null;
+
+  res.json({ cvText: cvForJob(job), filesContext });
 });
 
 // GET /api/jobs/:id/chat?mode=chat|interview
@@ -300,6 +342,20 @@ router.post('/:id/chat', async (req, res) => {
     // Use the CV text passed from the frontend, or look it up from the database.
     const cvText = clientCvText ?? cvForJob(job);
 
+    // Extract text from any readable attached files (PDFs, Word docs, plain text).
+    const attachedFiles = db.prepare('SELECT * FROM job_files WHERE job_id = ? ORDER BY created_at ASC').all(req.params.id);
+    const fileParts = [];
+    let totalChars = 0;
+    for (const f of attachedFiles) {
+      if (totalChars >= 30000) break;
+      const text = await extractFileText(f);
+      if (!text) continue;
+      const chunk = text.slice(0, Math.min(15000, 30000 - totalChars));
+      fileParts.push(`[File: ${f.original_name}]\n${chunk}`);
+      totalChars += chunk.length;
+    }
+    const filesContext = fileParts.length ? fileParts.join('\n\n') : null;
+
     let history;
     if (mode === 'interview') {
       // For interview mode, fetch the history including metadata and format it
@@ -332,8 +388,8 @@ router.post('/:id/chat', async (req, res) => {
 
     // Call the appropriate AI function based on whether this is an interview or regular chat.
     const { text, model: aiModel } = mode === 'interview'
-      ? await interviewChat(history, job, cvText)
-      : await jobChat(history, job, cvText, { deep });
+      ? await interviewChat(history, job, cvText, filesContext)
+      : await jobChat(history, job, cvText, { deep, filesContext });
 
     db.prepare('INSERT INTO job_chat (job_id, role, content, model, mode) VALUES (?, ?, ?, ?, ?)').run(req.params.id, 'assistant', text, aiModel, mode);
     res.json({ role: 'assistant', content: text, model: aiModel });
