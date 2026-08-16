@@ -20,8 +20,11 @@ const router = express.Router();
 // per message.
 function buildContext(db) {
   const userName = getSetting('display_name') || '';
-  // Pick whichever CV text is available (tech > hospitality > generic).
-  const cvText   = getSetting('cv_text_tech') || getSetting('cv_text_hospitality') || getSetting('cv_text') || '';
+  const cvTech   = getSetting('cv_text_tech') || '';
+  const cvHosp   = getSetting('cv_text_hospitality') || '';
+  const cvGeneric = getSetting('cv_text') || '';
+  const label1   = getSetting('cv_label_1') || 'CV Profile 1';
+  const label2   = getSetting('cv_label_2') || 'CV Profile 2';
 
   // Fetch up to 60 active jobs, ordered by pipeline stage (Interview first, then Applied, etc.)
   // so the most important jobs appear at the top of the context.
@@ -50,10 +53,21 @@ function buildContext(db) {
     return `- ${j.title} at ${j.company}, ${j.location || 'NZ'} — ${j.status}${cat}${score}${deadline}${desc}`;
   }).join('\n');
 
+  // Include full CV text (not just a "yes/no" flag) so Claude can actually reference it
+  // instead of asking the user to paste it in. Cached via cache_control, so the extra
+  // tokens are cheap on later turns in the same session.
+  const cvSections = [];
+  if (cvTech) cvSections.push(`${label1} CV:\n${cvTech}`);
+  if (cvHosp) cvSections.push(`${label2} CV:\n${cvHosp}`);
+  if (!cvTech && !cvHosp && cvGeneric) cvSections.push(`CV:\n${cvGeneric}`);
+  const cvBlock = cvSections.length
+    ? cvSections.join('\n\n')
+    : `No CV is on file for ${userName || 'the user'}. If CV-based advice is needed, tell them to upload one under Settings → CV Profiles rather than asking them to paste it here.`;
+
   return `${userName}'s active job pipeline (${jobs.length} jobs):
 ${jobLines || 'No active jobs.'}
 
-CV on file: ${cvText ? 'yes' : 'no'}.`;
+${cvBlock}`;
 }
 
 // GET /api/chat/sessions

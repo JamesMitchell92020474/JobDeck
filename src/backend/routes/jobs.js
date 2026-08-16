@@ -13,16 +13,7 @@ const { fetchDescriptionPage, normaliseJobType } = require('../services/fetchDes
 const { fetchDescriptionsForNewJobs }            = require('../services/scraper');
 const { exportCoverLetterPDF }  = require('../services/pdfExport');
 const { exportCoverLetterDocx } = require('../services/wordExport');
-
-// Returns the appropriate CV text for a given job based on its category.
-// Tech jobs use the tech CV; hospitality jobs use the hospitality CV.
-// Falls back to the generic CV if the category-specific one isn't uploaded.
-function cvForJob(job) {
-  const cat = job.job_category;
-  if (cat === 'tech')        return getSetting('cv_text_tech')        || getSetting('cv_text') || '';
-  if (cat === 'hospitality') return getSetting('cv_text_hospitality') || getSetting('cv_text') || '';
-  return getSetting('cv_text_tech') || getSetting('cv_text_hospitality') || getSetting('cv_text') || '';
-}
+const { allCvsForJob }          = require('../services/cvContext');
 
 const router = express.Router();
 
@@ -125,7 +116,7 @@ router.post('/filter-new', async (req, res) => {
   // Score all unscored active jobs regardless of pipeline stage
   for (const job of unscoredActive) {
     try {
-      const cvText = cvForJob(job);
+      const cvText = allCvsForJob(job);
       if (!cvText) continue;
       const result = await scoreFit(job.description, cvText);
       db.prepare(`UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?, description_summary = ?, updated_at = datetime('now') WHERE id = ?`)
@@ -233,7 +224,7 @@ router.post('/:id/ai-score', async (req, res) => {
   try {
     const job = getDb().prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
     if (!job) return res.status(404).json({ error: 'Not found' });
-    const cvText = cvForJob(job);
+    const cvText = allCvsForJob(job);
     const result = await scoreFit(job.description || job.title, cvText);
     getDb().prepare(`
       UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?, description_summary = ?, updated_at = datetime('now') WHERE id = ?
@@ -300,7 +291,7 @@ router.get('/:id/chat-context', async (req, res) => {
   }
   const filesContext = fileSections.length ? fileSections.join('\n\n') : null;
 
-  res.json({ cvText: cvForJob(job), filesContext });
+  res.json({ cvText: allCvsForJob(job), filesContext });
 });
 
 // GET /api/jobs/:id/chat?mode=chat|interview
@@ -340,7 +331,7 @@ router.post('/:id/chat', async (req, res) => {
 
   try {
     // Use the CV text passed from the frontend, or look it up from the database.
-    const cvText = clientCvText ?? cvForJob(job);
+    const cvText = clientCvText || allCvsForJob(job);
 
     // Extract text from any readable attached files (PDFs, Word docs, plain text).
     const attachedFiles = db.prepare('SELECT * FROM job_files WHERE job_id = ? ORDER BY created_at ASC').all(req.params.id);
@@ -456,7 +447,7 @@ router.post('/:id/cover-letter', async (req, res) => {
   if (!job) return res.status(404).json({ error: 'Not found' });
 
   try {
-    const cvText  = cvForJob(job);
+    const cvText  = allCvsForJob(job);
     const tmpl    = db.prepare('SELECT content FROM cover_letter_template WHERE id = 1').get();
     const text    = await generateCoverLetter(job, cvText, tmpl?.content || '');
     db.prepare("UPDATE jobs SET cover_letter = ?, updated_at = datetime('now') WHERE id = ?").run(text, req.params.id);
@@ -598,7 +589,7 @@ router.post('/:id/fetch-description', async (req, res) => {
   }
 
   // Auto-score in background — don't block the response
-  scoreFit(description, cvForJob(freshJob)).then(result => {
+  scoreFit(description, allCvsForJob(freshJob)).then(result => {
     const hasDeadline = freshJob.deadline && freshJob.deadline.trim();
     getDb().prepare(`
       UPDATE jobs SET fit_score = ?, ai_summary = ?, skills_gaps = ?, description_summary = ?,

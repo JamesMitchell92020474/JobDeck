@@ -3,13 +3,7 @@ const { fetchDescriptionPage, normaliseJobType } = require('./fetchDescription')
 const { scoreFit } = require('./ai');
 const { log } = require('./logger');
 const { autoTag } = require('./autoTag');
-
-function cvForJob(job) {
-  const cat = job.job_category;
-  if (cat === 'tech')        return getSetting('cv_text_tech')        || getSetting('cv_text') || '';
-  if (cat === 'hospitality') return getSetting('cv_text_hospitality') || getSetting('cv_text') || '';
-  return getSetting('cv_text_tech') || getSetting('cv_text_hospitality') || getSetting('cv_text') || '';
-}
+const { allCvsForJob } = require('./cvContext');
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
@@ -426,7 +420,7 @@ async function fetchDescriptionsForNewJobs(context, newJobs) {
         continue;
       }
 
-      const cvText = cvForJob(job);
+      const cvText = allCvsForJob(job);
       if (cvText) {
         try {
           const scored = await scoreFit(result.html, cvText);

@@ -205,9 +205,26 @@ top of the Overview tab. Not shown in the sidebar.
 
 API key loaded from `ANTHROPIC_API_KEY` env var, falls back to `api_key` DB setting.
 
+### CV context
+
+`src/backend/services/cvContext.js` exports `allCvsForJob(job)` — the single shared helper for
+resolving CV text to hand the AI. Returns **both** uploaded CV profiles (tech and hospitality),
+each labelled with its `cv_label_1`/`cv_label_2` setting, separated by `---`, with the job's
+`job_category`-matched profile flagged inline as `(primary match for this role)`. Falls back to
+the legacy `cv_text` setting if neither profile-specific CV is uploaded. Used by every AI
+call site that touches CVs: `scoreFit()` (ai-score route, fetch-description background,
+filter-new route, scraper), `generateCoverLetter()`, `jobChat()`, and `interviewChat()` — so
+Claude can pull in genuinely relevant cross-category experience (e.g. hospitality customer
+service history relevant to a job tagged `tech` or left uncategorised) rather than being
+blind to it. Each of those AI functions' system prompts instructs Claude to treat the
+category-matched CV as primary while still drawing on the other where relevant — this is a
+prompting convention only; there's no separate UI feature that names which physical CV file to
+attach to an external application. That signal is still the job's category badge (auto-tagged
+on creation) and the Cover Letter tab's default active profile, both unchanged by this.
+
 `scoreFit()` returns: `{ fit_score, summary, skills_gaps, deadline, description_summary }` — all extracted in one call. `summary` is written in second person ("you/your"). `description_summary` is a 1-2 sentence plain-text overview of the role, stored on the job and used in global chat context to reduce token usage. Saved to `jobs.description_summary` by all four score-save sites (ai-score route, fetch-description background, filter-new route, scraper).
 
-`interviewChat(messages, job, cvText)` — mock interview mode for per-card chat. Claude plays a professional interviewer: opens with "tell me about yourself", asks 12–15 questions (behavioural/STAR, technical, situational), may ask 1 follow-up per answer, gives no mid-interview feedback, closes professionally, then delivers a written assessment covering strengths, areas to improve, and a communication style section (uses per-answer metadata: duration, word count, filler words). Uses separate message history (`mode = 'interview'` on `job_chat` rows). Transcripts saved to `job_interview_runs` table.
+`interviewChat(messages, job, cvText)` — mock interview mode for per-card chat. Claude plays a professional interviewer: opens with "tell me about yourself", asks 12–15 questions (behavioural/STAR, technical, situational), may ask 1 follow-up per answer, gives no mid-interview feedback, closes professionally, then delivers a written assessment covering strengths, areas to improve, and a communication style section (uses per-answer metadata: duration, word count, filler words). Uses separate message history (`mode = 'interview'` on `job_chat` rows). Transcripts saved to `job_interview_runs` table. If no CV is on file, the system prompt tells Claude to direct the user to Settings → CV Profiles rather than asking them to paste CV text into the chat.
 
 `generateWelcome(stats, displayName, weather)` — weather is fetched from Open-Meteo using coordinates derived from the `scraper_location` setting (lookup table for main NZ cities). No API key required. Falls back gracefully if fetch fails. Includes correct NZ Southern Hemisphere season. Strips any leading greeting from the AI response server-side.
 
@@ -218,6 +235,12 @@ No React Router — uses simple string state in `App.jsx`:
 route: 'dash' | 'board' | 'detail' | 'chat' | 'settings'
 ```
 `detailJobId` holds the current job ID when `route === 'detail'`.
+
+`route` and `detailJobId` are persisted to `sessionStorage` (`jd-route`, `jd-detail-job-id`) on
+every change and restored on mount, so a browser refresh keeps you on the same page (including
+a specific job's detail view) instead of bouncing back to the dashboard. Board filter/sort state
+(`boardQuery`, `boardSrcFilter`, etc.) is lifted to `AppInner` but not persisted across a refresh —
+only across in-app navigation (see Board filtering and sorting below).
 
 `App.jsx` checks `GET /api/setup/status` before mounting `AppProvider`. If setup is
 needed, renders `<SetupWizard />` instead of the main app.
@@ -238,7 +261,7 @@ Sidebar labels: "Home" (dash) · "Job Board" (board) · "Chat" · "Settings"
 | PUT | /api/jobs/:id/move | Move to kanban column |
 | POST | /api/jobs/:id/ai-score | Score job against CV |
 | POST | /api/jobs/:id/fetch-description | Scrape description, logo, company_url, posting_date, job_type, salary from source_url; auto-scores in background |
-| GET | /api/jobs/:id/chat-context | Returns `{ cvText, filesContext }` for the job — fetched once by the frontend on card open |
+| GET | /api/jobs/:id/chat-context | Returns `{ cvText, filesContext }` for the job — fetched once by the frontend on card open. `cvText` is both uploaded CV profiles (see CV context under AI models) |
 | GET/POST | /api/jobs/:id/chat | Per-card Claude chat (`?mode=chat\|interview`; POST body includes `{ mode, cvText }`). On each POST the backend reads attached files server-side and injects their text into the AI system prompt. |
 | POST | /api/jobs/:id/cover-letter | Generate cover letter |
 | POST | /api/jobs/:id/export-pdf | Export cover letter as PDF — body: `{ html, settings }`. Applies page margins, fonts, letterhead from `settings`; falls back to `jobs.cover_letter_settings`. Playwright-based, saves to uploads/cover-letters/ |
@@ -368,13 +391,15 @@ A `descFetchInProgress` module-level flag prevents concurrent background fetches
 
 Jobs are auto-tagged on creation (POST /api/jobs and scraper inserts) via `src/backend/services/autoTag.js`.
 
-| Value | Label (configurable) | CV used for AI |
-|-------|----------------------|----------------|
-| `tech` | `cv_label_1` setting (default: "CV Profile 1") | `cv_text_tech` → `cv_text` |
-| `hospitality` | `cv_label_2` setting (default: "CV Profile 2") | `cv_text_hospitality` → `cv_text` |
-| `null` | General | `cv_text_tech` → `cv_text_hospitality` → `cv_text` |
+| Value | Label (configurable) | Primary CV match |
+|-------|----------------------|-------------------|
+| `tech` | `cv_label_1` setting (default: "CV Profile 1") | `cv_text_tech` |
+| `hospitality` | `cv_label_2` setting (default: "CV Profile 2") | `cv_text_hospitality` |
+| `null` | General | none — both weighted equally |
 
 Category labels are user-configurable via Settings — the internal DB values (`tech`/`hospitality`) are unchanged. Labels flow through to job card badges, board filter chips, category dropdown, and Add Job modal.
+
+"Primary CV match" is only a prompting hint now, not a hard filter — `allCvsForJob()` (see CV context under AI models) sends both uploaded CVs to every AI call regardless of category, with the matching one flagged as primary.
 
 ## Edit job
 

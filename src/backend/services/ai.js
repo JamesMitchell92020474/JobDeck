@@ -77,7 +77,7 @@ async function scoreFit(jobDescription, cvText) {
 JOB DESCRIPTION:
 ${jobDescription}
 
-CANDIDATE CV:
+CANDIDATE CV(S) — there may be more than one profile (e.g. tech vs. hospitality). Score the fit using whichever CV(s) are actually relevant to this role; do not penalise the candidate for content in an unrelated profile:
 ${cvText}
 
 Return a JSON object with exactly these fields:
@@ -105,8 +105,8 @@ async function generateCoverLetter(job, cvText, template) {
 ROLE: ${job.title} at ${job.company} in ${job.location || 'NZ'}
 JOB DESCRIPTION: ${(job.description || '').slice(0, 2000)}
 
-CANDIDATE CV SUMMARY:
-${(cvText || '').slice(0, 3000)}
+CANDIDATE CV(S) ON FILE — there may be more than one profile (e.g. tech vs. hospitality). Draw primarily on whichever is the closer match for this role, but pull in genuinely relevant experience from the other if it strengthens the case:
+${cvText || ''}
 
 TEMPLATE / STYLE GUIDANCE:
 ${template || `Professional, concise. 3 paragraphs. ${signOff}`}
@@ -125,10 +125,13 @@ async function jobChat(messages, job, cvText, { deep = false, filesContext = nul
   const name   = userName();
   const model  = (deep && getSetting('deep_analysis') === '1') ? OPUS : SONNET;
   const fileSection = filesContext ? `\n\nThe user has attached the following files to this job listing — treat them as part of your context:\n${filesContext}` : '';
+  const cvSection = cvText
+    ? `${name}'s CV(s) on file — may include more than one profile (e.g. tech vs. hospitality); use whichever is relevant, or draw on both:\n${cvText}`
+    : `No CV is on file for ${name}. Do not ask them to paste their CV text into the chat — instead tell them to upload their CV under Settings → CV Profiles, and it will automatically be available here.`;
   const system = `You are helping ${name} prepare for a job application.
 Role: ${job.title} at ${job.company}.
 Job description: ${(job.description || '').slice(0, 2000)}
-CV summary: ${(cvText || '').slice(0, 2000)}${fileSection}
+${cvSection}${fileSection}
 Be concise, specific, and practically useful.`;
 
   const res = await client.messages.create({
@@ -182,7 +185,7 @@ Three numbered, concrete tips personalised to this candidate's specific strength
 ANSWER METADATA: Each candidate message may begin with a header like "[Answer: 1m 12s | 95 words | Filler words: "um" x4, "like" x2]". Use this data to inform the Communication Style section of your assessment, but do not reference or comment on it during the interview itself — only in the final assessment.
 
 Job description: ${(job.description || '').slice(0, 2000)}
-Candidate CV: ${(cvText || '').slice(0, 2000)}${filesContext ? `\n\nThe user has attached the following files to this job listing — use them when drawing interview questions:\n${filesContext}` : ''}`;
+${cvText ? `Candidate's CV(s) on file — may include more than one profile (e.g. tech vs. hospitality); draw on whichever is relevant:\n${cvText}` : `No CV is on file for the candidate — base your questions on the job description alone, and do not ask the candidate to paste CV text into the chat.`}${filesContext ? `\n\nThe user has attached the following files to this job listing — use them when drawing interview questions:\n${filesContext}` : ''}`;
 
   const res = await client.messages.create({
     model: SONNET,

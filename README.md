@@ -8,16 +8,16 @@ AI-powered job search dashboard. Scrapes Seek and Trade Me Jobs, scores listings
 
 **Pipeline**
 - Kanban board — New → Interested → Applied → Interview → Offer → Rejected → Archived
-- AI fit scoring (0–100) against your CV with second-person summary and skills gaps
+- AI fit scoring (0–100) with second-person summary and skills gaps — weighs both your CV profiles, not just the one matching the job's category, so cross-category experience still counts
 - One-click AI filter — scores all unscored active jobs, archives poor fits from the New column (configurable threshold)
 - Playwright scraper for Seek and Trade Me Jobs (manual sync or optional startup auto-sync)
 - Full description fetch per job — extracts salary, job type, posting date, and company website URL (shown on the job detail page when available)
 - Exclude keywords per CV profile — jobs matching excluded terms in title or description are silently skipped
-- Board filter and sort state persists when navigating to a job and back
+- Board filter and sort state persists when navigating to a job and back; the page you're on survives a browser refresh too
 
 **AI chat**
-- Global chat with named session history — discuss your whole job search with Claude
-- Per-job chat — Claude has the job description and your CV as context
+- Global chat with named session history — discuss your whole job search with Claude, with both CV profiles available as context
+- Per-job chat — Claude has the job description and both your CV profiles as context, so it never asks you to paste your CV in
 - Voice mode — hands-free conversation; mic restarts automatically after each response
 - Mock interview — voice and TTS auto-enable on entry; 15 realistic questions with 2.5 second pause before sending to allow thinking time; written assessment at the end; save, restart, and compare transcripts across sessions
 
@@ -26,7 +26,7 @@ AI-powered job search dashboard. Scrapes Seek and Trade Me Jobs, scores listings
 - Per-job page settings — all four margins, font family (picks up your installed system fonts), font size, line height, and paragraph spacing
 - Text colour picker and inline font styling on selected text
 - Dual letterhead profiles — one for Tech/IT, one for Hospitality/Retail, each with its own logo, name, styled contact details, and separator line. Set them up once; they auto-load based on the job category with a one-click switcher to override
-- AI cover letter generation from your CV and the job description
+- AI cover letter generation from both your CVs and the job description — leads with whichever CV best matches the role
 - Export as PDF (exact page layout via Playwright) or Word (.docx with formatting preserved)
 - Two CV profiles with configurable labels (e.g. "Tech / IT" and "Retail / Hospitality")
 

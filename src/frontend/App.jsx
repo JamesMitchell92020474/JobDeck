@@ -12,8 +12,11 @@ import AddJobModal  from './components/cards/AddJobModal'
 import SetupWizard  from './pages/SetupWizard'
 
 function AppInner() {
-  const [route,       setRoute]       = useState('dash')
-  const [detailJobId, setDetailJobId] = useState(null)
+  const [route,       setRoute]       = useState(() => sessionStorage.getItem('jd-route') || 'dash')
+  const [detailJobId, setDetailJobId] = useState(() => {
+    const saved = sessionStorage.getItem('jd-detail-job-id')
+    return saved ? Number(saved) : null
+  })
   const [addingJob,   setAddingJob]   = useState(false)
   const { setJobs } = useApp()
 
@@ -23,6 +26,12 @@ function AppInner() {
   const [boardTypeFilter, setBoardTypeFilter] = useState('All')
   const [boardSortBy,     setBoardSortBy]     = useState('added')
   const [boardSortDir,    setBoardSortDir]    = useState('desc')
+
+  useEffect(() => { sessionStorage.setItem('jd-route', route) }, [route])
+  useEffect(() => {
+    if (detailJobId) sessionStorage.setItem('jd-detail-job-id', detailJobId)
+    else sessionStorage.removeItem('jd-detail-job-id')
+  }, [detailJobId])
 
   const navigate = (r) => setRoute(r)
 
