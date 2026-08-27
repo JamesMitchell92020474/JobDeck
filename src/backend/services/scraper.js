@@ -455,27 +455,46 @@ async function fetchDescriptionsForNewJobs(context, newJobs) {
   log({ type: 'scraper', trigger: 'AUTO', action: 'FETCH-DESC-DONE', reason: `Processed ${done}/${withUrl.length} jobs, archived ${toArchive.length} poor fits` });
 }
 
+// Guards against overlapping scrape runs — e.g. sync_on_startup firing while a manual
+// Sync click is already in progress, or a double click of the Sync button. Without this,
+// concurrent runs each launch their own Playwright browser and hammer the same search
+// pages, which is what makes sync feel like it's "struggling" (slow, duplicated work).
+// Held until each run's background description-fetch batch finishes too, not just the
+// search/save phase, since that's the part that stacks up if a second run starts too soon.
+let scrapeInProgress = false;
+
 async function runScrape(sources = ['Seek', 'Trade Me Jobs']) {
+  if (scrapeInProgress) {
+    log({ type: 'scraper', trigger: 'AUTO', action: 'SCRAPE-SKIPPED', reason: 'A scrape is already in progress' });
+    return { skipped: true };
+  }
+  scrapeInProgress = true;
+
   const disabledStr = getSetting('disabled_sources') || '{}';
   const disabled = JSON.parse(disabledStr);
 
   const scrapers = { Seek: scrapeSeek, 'Trade Me Jobs': scrapeTradeMe };
   const results = {};
+  const backgroundTasks = [];
 
-  for (const src of sources) {
-    if (disabled[src]) { results[src] = { skipped: true }; continue; }
-    const scraper = scrapers[src];
-    if (!scraper) continue;
+  try {
+    for (const src of sources) {
+      if (disabled[src]) { results[src] = { skipped: true }; continue; }
+      const scraper = scrapers[src];
+      if (!scraper) continue;
 
-    log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-START', source: src });
-    const { jobs, browser, context } = await scraper();
-    const { count: saved, newJobs } = saveJobsToDB(jobs);
-    log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-DONE', source: src, reason: `${jobs.length} found, ${saved} new` });
-    setSetting(`last_sync_${src}`, new Date().toISOString());
-    results[src] = { found: jobs.length, saved };
+      log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-START', source: src });
+      const { jobs, browser, context } = await scraper();
+      const { count: saved, newJobs } = saveJobsToDB(jobs);
+      log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-DONE', source: src, reason: `${jobs.length} found, ${saved} new` });
+      setSetting(`last_sync_${src}`, new Date().toISOString());
+      results[src] = { found: jobs.length, saved };
 
-    // Fetch descriptions + auto-score in background — browser closes when done
-    fetchDescriptionsForNewJobs(context, newJobs).finally(() => browser.close()).catch(() => {});
+      // Fetch descriptions + auto-score in background — browser closes when done
+      backgroundTasks.push(fetchDescriptionsForNewJobs(context, newJobs).finally(() => browser.close()).catch(() => {}));
+    }
+  } finally {
+    Promise.allSettled(backgroundTasks).finally(() => { scrapeInProgress = false; });
   }
 
   return results;

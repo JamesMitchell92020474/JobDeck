@@ -224,6 +224,8 @@ on creation) and the Cover Letter tab's default active profile, both unchanged b
 
 `scoreFit()` returns: `{ fit_score, summary, skills_gaps, deadline, description_summary }` — all extracted in one call. `summary` is written in second person ("you/your"). `description_summary` is a 1-2 sentence plain-text overview of the role, stored on the job and used in global chat context to reduce token usage. Saved to `jobs.description_summary` by all four score-save sites (ai-score route, fetch-description background, filter-new route, scraper).
 
+**Second-person addressing** — `jobChat()`, `interviewChat()`'s final assessment, and `globalChat()` each carry an explicit system prompt instruction to address the user as "you/your", never by name or in third person. This was added because every system prompt refers to the user by name from Claude's perspective (e.g. `"You are helping James..."`), and without an explicit instruction Claude tends to drift into describing the user in third person in its replies (`"James should be honest about..."`) — `scoreFit()` was the only function where this was already handled correctly, since its prompt already had this instruction.
+
 `interviewChat(messages, job, cvText)` — mock interview mode for per-card chat. Claude plays a professional interviewer: opens with "tell me about yourself", asks 12–15 questions (behavioural/STAR, technical, situational), may ask 1 follow-up per answer, gives no mid-interview feedback, closes professionally, then delivers a written assessment covering strengths, areas to improve, and a communication style section (uses per-answer metadata: duration, word count, filler words). Uses separate message history (`mode = 'interview'` on `job_chat` rows). Transcripts saved to `job_interview_runs` table. If no CV is on file, the system prompt tells Claude to direct the user to Settings → CV Profiles rather than asking them to paste CV text into the chat.
 
 `generateWelcome(stats, displayName, weather)` — weather is fetched from Open-Meteo using coordinates derived from the `scraper_location` setting (lookup table for main NZ cities). No API key required. Falls back gracefully if fetch fails. Includes correct NZ Southern Hemisphere season. Strips any leading greeting from the AI response server-side.
@@ -430,7 +432,9 @@ Playwright scrapers in `src/backend/services/scraper.js`.
 Run `npx playwright install chromium` before using.
 LinkedIn: manual add only (no scraping). Jora and Indeed removed — low NZ value/overlap.
 Cron schedule: `src/backend/cron.js` — housekeeping 2:00 NZST (daily scrape removed; use Sync button or enable `sync_on_startup` in Settings).
-`maybeStartupSync()` in `startup.js` — called after DB init; runs `runScrape()` in background if `sync_on_startup = '1'`.
+`maybeStartupSync()` in `startup.js` — called after DB init; runs `runScrape()` in background if `sync_on_startup = '1'`. Fires on every backend process start, including a dev-mode nodemon restart, not just a genuine app launch.
+
+**Concurrency guard** — a module-level `scrapeInProgress` flag in `runScrape()` skips (logs `SCRAPE-SKIPPED`) a call made while a previous run is still active, including its background description-fetch phase. Without this, overlapping triggers (e.g. `sync_on_startup` racing a manual Sync click, or a nodemon restart mid-sync in dev) launch duplicate concurrent Playwright sessions hitting the same search pages, which is what made sync feel slow/stuck before this was added.
 
 Scraper reads `scraper_location`, `scraper_keywords_tech`, `scraper_keywords_hospitality`, `scraper_max_age_days` from settings to build search URLs. Seek uses `daterange` param for age filtering. Saves `last_sync_{source}` setting on completion.
 

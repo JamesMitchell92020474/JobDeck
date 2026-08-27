@@ -10,7 +10,7 @@ AI-powered job search dashboard. Scrapes Seek and Trade Me Jobs, scores listings
 - Kanban board — New → Interested → Applied → Interview → Offer → Rejected → Archived
 - AI fit scoring (0–100) with second-person summary and skills gaps — weighs both your CV profiles, not just the one matching the job's category, so cross-category experience still counts
 - One-click AI filter — scores all unscored active jobs, archives poor fits from the New column (configurable threshold)
-- Playwright scraper for Seek and Trade Me Jobs (manual sync or optional startup auto-sync)
+- Playwright scraper for Seek and Trade Me Jobs (manual sync or optional startup auto-sync); guarded against overlapping runs so a startup sync and a manual click can't double up
 - Full description fetch per job — extracts salary, job type, posting date, and company website URL (shown on the job detail page when available)
 - Exclude keywords per CV profile — jobs matching excluded terms in title or description are silently skipped
 - Board filter and sort state persists when navigating to a job and back; the page you're on survives a browser refresh too
@@ -18,8 +18,9 @@ AI-powered job search dashboard. Scrapes Seek and Trade Me Jobs, scores listings
 **AI chat**
 - Global chat with named session history — discuss your whole job search with Claude, with both CV profiles available as context
 - Per-job chat — Claude has the job description and both your CV profiles as context, so it never asks you to paste your CV in
+- Claude addresses you directly ("you/your") throughout every chat, not by name or in third person
 - Voice mode — hands-free conversation; mic restarts automatically after each response
-- Mock interview — voice and TTS auto-enable on entry; 15 realistic questions with 2.5 second pause before sending to allow thinking time; written assessment at the end; save, restart, and compare transcripts across sessions
+- Mock interview — voice and TTS auto-enable on entry; 15 realistic questions with 2.5 second pause before sending to allow thinking time; written assessment at the end (addressed to you directly); save, restart, and compare transcripts across sessions
 
 **Cover letters**
 - Full page editor — A4 or Letter canvas with drop-shadow print preview so you see exactly what will export

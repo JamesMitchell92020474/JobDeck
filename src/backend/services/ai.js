@@ -132,6 +132,7 @@ async function jobChat(messages, job, cvText, { deep = false, filesContext = nul
 Role: ${job.title} at ${job.company}.
 Job description: ${(job.description || '').slice(0, 2000)}
 ${cvSection}${fileSection}
+Address ${name} directly as "you/your" throughout your replies — never by name or in third person (e.g. not "James should..." or "he has...").
 Be concise, specific, and practically useful.`;
 
   const res = await client.messages.create({
@@ -165,22 +166,22 @@ STRUCTURE:
 3. If a candidate's answer mentions something particularly interesting, unexpected, or vague, you may ask ONE focused follow-up before moving on. Keep total questions including follow-ups under 20.
 4. After each answer, do NOT give feedback or evaluation — simply acknowledge naturally (e.g. "Thank you", "Great", "Understood", "Interesting") and move to your next question. Save all evaluation for the end.
 5. After 12–15 questions, close the interview professionally: "Thank you so much for coming in today, ${name}. We've really enjoyed learning more about you and your experience. We'll be reviewing all candidates and will be in touch shortly."
-6. Immediately after the closing, provide a full written assessment using exactly these headings:
+6. Immediately after the closing, provide a full written assessment addressed directly to ${name} — use "you/your" throughout, never "the candidate" or third person — using exactly these headings:
 
 **Overall Impression**
-2–3 sentences on your general impression of the candidate.
+2–3 sentences on your overall impression of the interview.
 
 **Strengths**
-Bullet points — what they demonstrated well, with specific examples from their answers.
+Bullet points — what you demonstrated well, with specific examples from your answers.
 
 **Areas for Improvement**
-Bullet points — specific, actionable feedback tied to their actual answers.
+Bullet points — specific, actionable feedback tied to your actual answers.
 
 **Communication Style**
-Comment on: conciseness and pacing (using the time data in answer metadata), filler word usage (using filler word counts in answer metadata), clarity, and how their confidence and structure evolved across the interview. Be specific about patterns you noticed.
+Comment on: conciseness and pacing (using the time data in answer metadata), filler word usage (using filler word counts in answer metadata), clarity, and how your confidence and structure evolved across the interview. Be specific about patterns you noticed.
 
 **Top 3 Tips for the Real Interview**
-Three numbered, concrete tips personalised to this candidate's specific strengths and weaknesses.
+Three numbered, concrete tips personalised to your specific strengths and weaknesses.
 
 ANSWER METADATA: Each candidate message may begin with a header like "[Answer: 1m 12s | 95 words | Filler words: "um" x4, "like" x2]". Use this data to inform the Communication Style section of your assessment, but do not reference or comment on it during the interview itself — only in the final assessment.
 
@@ -220,7 +221,7 @@ async function globalChat(messages, context, useOpus = false) {
         type: 'text',
         // The system prompt includes the full job pipeline so Claude can discuss
         // specific listings, compare opportunities, and give tailored advice.
-        text: `You are a personal job search assistant for ${name}.\n${context}\nBe concise and practically useful.`,
+        text: `You are a personal job search assistant for ${name}.\n${context}\nAddress ${name} directly as "you/your" throughout your replies — never by name or in third person.\nBe concise and practically useful.`,
         // This tells Anthropic to cache this block — saves cost on long conversations.
         cache_control: { type: 'ephemeral' },
       },
