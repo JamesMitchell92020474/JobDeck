@@ -14,6 +14,7 @@ const { fetchDescriptionsForNewJobs }            = require('../services/scraper'
 const { exportCoverLetterPDF }  = require('../services/pdfExport');
 const { exportCoverLetterDocx } = require('../services/wordExport');
 const { allCvsForJob }          = require('../services/cvContext');
+const { extractLinksContext }   = require('../services/urlFetch');
 
 const router = express.Router();
 
@@ -347,6 +348,9 @@ router.post('/:id/chat', async (req, res) => {
     }
     const filesContext = fileParts.length ? fileParts.join('\n\n') : null;
 
+    // Fetch the content of any links the user pasted into this message.
+    const linkContext = await extractLinksContext(content);
+
     let history;
     if (mode === 'interview') {
       // For interview mode, fetch the history including metadata and format it
@@ -379,8 +383,8 @@ router.post('/:id/chat', async (req, res) => {
 
     // Call the appropriate AI function based on whether this is an interview or regular chat.
     const { text, model: aiModel } = mode === 'interview'
-      ? await interviewChat(history, job, cvText, filesContext)
-      : await jobChat(history, job, cvText, { deep, filesContext });
+      ? await interviewChat(history, job, cvText, filesContext, linkContext)
+      : await jobChat(history, job, cvText, { deep, filesContext, linkContext });
 
     db.prepare('INSERT INTO job_chat (job_id, role, content, model, mode) VALUES (?, ?, ?, ?, ?)').run(req.params.id, 'assistant', text, aiModel, mode);
     res.json({ role: 'assistant', content: text, model: aiModel });

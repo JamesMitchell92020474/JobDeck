@@ -19,6 +19,7 @@ AI-powered job search dashboard. Scrapes Seek and Trade Me Jobs, scores listings
 - Global chat with named session history — discuss your whole job search with Claude, with both CV profiles available as context
 - Per-job chat — Claude has the job description and both your CV profiles as context, so it never asks you to paste your CV in
 - Claude addresses you directly ("you/your") throughout every chat, not by name or in third person
+- Paste a link into any chat (global, per-job, or mock interview) and Claude reads the page directly — no need to copy the text in yourself
 - Voice mode — hands-free conversation; mic restarts automatically after each response
 - Mock interview — voice and TTS auto-enable on entry; 15 realistic questions with 2.5 second pause before sending to allow thinking time; written assessment at the end (addressed to you directly); save, restart, and compare transcripts across sessions
 

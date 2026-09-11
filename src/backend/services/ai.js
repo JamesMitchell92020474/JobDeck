@@ -120,18 +120,19 @@ Write the cover letter as plain text. No subject line. Start with the salutation
 // "messages" is the full conversation history so Claude remembers earlier turns.
 // The job description and CV are included in the system prompt so Claude has
 // context about what role is being discussed.
-async function jobChat(messages, job, cvText, { deep = false, filesContext = null } = {}) {
+async function jobChat(messages, job, cvText, { deep = false, filesContext = null, linkContext = null } = {}) {
   const client = getClient();
   const name   = userName();
   const model  = (deep && getSetting('deep_analysis') === '1') ? OPUS : SONNET;
   const fileSection = filesContext ? `\n\nThe user has attached the following files to this job listing — treat them as part of your context:\n${filesContext}` : '';
+  const linkSection = linkContext ? `\n\nThe user included the following link(s) in their message — here's the extracted page content:\n${linkContext}` : '';
   const cvSection = cvText
     ? `${name}'s CV(s) on file — may include more than one profile (e.g. tech vs. hospitality); use whichever is relevant, or draw on both:\n${cvText}`
     : `No CV is on file for ${name}. Do not ask them to paste their CV text into the chat — instead tell them to upload their CV under Settings → CV Profiles, and it will automatically be available here.`;
   const system = `You are helping ${name} prepare for a job application.
 Role: ${job.title} at ${job.company}.
 Job description: ${(job.description || '').slice(0, 2000)}
-${cvSection}${fileSection}
+${cvSection}${fileSection}${linkSection}
 Address ${name} directly as "you/your" throughout your replies — never by name or in third person (e.g. not "James should..." or "he has...").
 Be concise, specific, and practically useful.`;
 
@@ -155,7 +156,7 @@ Be concise, specific, and practically useful.`;
 //
 // Each user message may include a metadata header like "[Answer: 45s | 120 words]"
 // which Claude uses in the final Communication Style section of the assessment.
-async function interviewChat(messages, job, cvText, filesContext = null) {
+async function interviewChat(messages, job, cvText, filesContext = null, linkContext = null) {
   const client = getClient();
   const name   = userName();
   const system = `You are conducting a realistic mock job interview for ${name}, who is applying for ${job.title} at ${job.company}.
@@ -186,7 +187,7 @@ Three numbered, concrete tips personalised to your specific strengths and weakne
 ANSWER METADATA: Each candidate message may begin with a header like "[Answer: 1m 12s | 95 words | Filler words: "um" x4, "like" x2]". Use this data to inform the Communication Style section of your assessment, but do not reference or comment on it during the interview itself — only in the final assessment.
 
 Job description: ${(job.description || '').slice(0, 2000)}
-${cvText ? `Candidate's CV(s) on file — may include more than one profile (e.g. tech vs. hospitality); draw on whichever is relevant:\n${cvText}` : `No CV is on file for the candidate — base your questions on the job description alone, and do not ask the candidate to paste CV text into the chat.`}${filesContext ? `\n\nThe user has attached the following files to this job listing — use them when drawing interview questions:\n${filesContext}` : ''}`;
+${cvText ? `Candidate's CV(s) on file — may include more than one profile (e.g. tech vs. hospitality); draw on whichever is relevant:\n${cvText}` : `No CV is on file for the candidate — base your questions on the job description alone, and do not ask the candidate to paste CV text into the chat.`}${filesContext ? `\n\nThe user has attached the following files to this job listing — use them when drawing interview questions:\n${filesContext}` : ''}${linkContext ? `\n\nThe candidate included the following link(s) in their message — here's the extracted page content:\n${linkContext}` : ''}`;
 
   const res = await client.messages.create({
     model: SONNET,
@@ -208,24 +209,31 @@ ${cvText ? `Candidate's CV(s) on file — may include more than one profile (e.g
 // Prompt caching: the system prompt is sent as a special block that Anthropic
 // caches for 5 minutes. After the first message, subsequent turns in the same
 // session pay roughly 10% of the normal input token cost for the cached portion.
-async function globalChat(messages, context, useOpus = false) {
+async function globalChat(messages, context, useOpus = false, linkContext = null) {
   const client = getClient();
   const model  = useOpus ? OPUS : SONNET;
   const name   = userName();
 
+  const system = [
+    {
+      type: 'text',
+      // The system prompt includes the full job pipeline so Claude can discuss
+      // specific listings, compare opportunities, and give tailored advice.
+      text: `You are a personal job search assistant for ${name}.\n${context}\nAddress ${name} directly as "you/your" throughout your replies — never by name or in third person.\nBe concise and practically useful.`,
+      // This tells Anthropic to cache this block — saves cost on long conversations.
+      cache_control: { type: 'ephemeral' },
+    },
+  ];
+  // Link content varies per message, so it's a separate, uncached block appended after
+  // the cached pipeline context — keeps the expensive block reusable across turns.
+  if (linkContext) {
+    system.push({ type: 'text', text: `The user included the following link(s) in their message — here's the extracted page content:\n${linkContext}` });
+  }
+
   const res = await client.messages.create({
     model,
     max_tokens: 2048,
-    system: [
-      {
-        type: 'text',
-        // The system prompt includes the full job pipeline so Claude can discuss
-        // specific listings, compare opportunities, and give tailored advice.
-        text: `You are a personal job search assistant for ${name}.\n${context}\nAddress ${name} directly as "you/your" throughout your replies — never by name or in third person.\nBe concise and practically useful.`,
-        // This tells Anthropic to cache this block — saves cost on long conversations.
-        cache_control: { type: 'ephemeral' },
-      },
-    ],
+    system,
     messages: messages.map(m => ({ role: m.role, content: m.content })),
   });
   return { text: res.content[0].text, model };

@@ -8,6 +8,7 @@
 const express = require('express');
 const { getDb, getSetting } = require('../db/database');
 const { globalChat } = require('../services/ai');
+const { extractLinksContext } = require('../services/urlFetch');
 
 // express.Router() creates a mini app just for these routes.
 const router = express.Router();
@@ -162,8 +163,10 @@ router.post('/', async (req, res) => {
     const history = db.prepare('SELECT role, content FROM global_chat WHERE session_id = ? ORDER BY created_at ASC').all(session_id);
     // Use the cached context from the frontend, or build it fresh if not provided.
     const context = clientContext || buildContext(db);
+    // Fetch the content of any links the user pasted into this message.
+    const linkContext = await extractLinksContext(content);
 
-    const { text, model } = await globalChat(history, context, !!deep_analysis);
+    const { text, model } = await globalChat(history, context, !!deep_analysis, linkContext);
 
     // Save Claude's reply to the database.
     db.prepare('INSERT INTO global_chat (session_id, role, content, model, is_deep_analysis) VALUES (?, ?, ?, ?, ?)')

@@ -226,6 +226,27 @@ on creation) and the Cover Letter tab's default active profile, both unchanged b
 
 **Second-person addressing** — `jobChat()`, `interviewChat()`'s final assessment, and `globalChat()` each carry an explicit system prompt instruction to address the user as "you/your", never by name or in third person. This was added because every system prompt refers to the user by name from Claude's perspective (e.g. `"You are helping James..."`), and without an explicit instruction Claude tends to drift into describing the user in third person in its replies (`"James should be honest about..."`) — `scoreFit()` was the only function where this was already handled correctly, since its prompt already had this instruction.
 
+### Link fetching
+
+`src/backend/services/urlFetch.js` exports `extractLinksContext(message)` — detects up to 3
+`http(s)://` URLs in a chat message (regex-based, dedups, trims trailing punctuation) and fetches
+each one so Claude can read the page directly instead of the user pasting its text in. Fast path is
+a plain `fetch()` + regex HTML strip (drops `<script>`/`<style>`/`<nav>`/`<header>`/`<footer>`/`<aside>`,
+prefers `<article>`/`<main>` content when present, decodes named + numeric HTML entities); falls back
+to a headless Playwright render (`document.body.innerText`) when the plain fetch returns under 200
+chars, for JS-rendered pages. Blocks `localhost`/private-network/link-local hostnames so a pasted
+link can't be used to probe the machine JobDeck runs on. Caps: 6,000 chars/link, 15,000 chars total;
+8s fetch timeout. A failed/blocked link becomes an inline `(Could not fetch this page: ...)` note
+rather than failing the whole chat request.
+
+Called from all three chat call sites — `POST /api/jobs/:id/chat` (both `chat` and `interview` mode)
+and `POST /api/chat` — on the incoming message before building the AI prompt, and passed through as
+`linkContext` to `jobChat()`/`interviewChat()`/`globalChat()`. It's per-message only: the extracted
+page text isn't stored, so it isn't re-sent on later turns — only Claude's own reply (which is saved
+to history as normal) persists the gist of what was on the page. In `globalChat()`, link content is
+appended as a **separate, uncached** system block after the `cache_control: ephemeral` pipeline
+block, so a message with a link doesn't invalidate the prompt cache for the rest of the session.
+
 `interviewChat(messages, job, cvText)` — mock interview mode for per-card chat. Claude plays a professional interviewer: opens with "tell me about yourself", asks 12–15 questions (behavioural/STAR, technical, situational), may ask 1 follow-up per answer, gives no mid-interview feedback, closes professionally, then delivers a written assessment covering strengths, areas to improve, and a communication style section (uses per-answer metadata: duration, word count, filler words). Uses separate message history (`mode = 'interview'` on `job_chat` rows). Transcripts saved to `job_interview_runs` table. If no CV is on file, the system prompt tells Claude to direct the user to Settings → CV Profiles rather than asking them to paste CV text into the chat.
 
 `generateWelcome(stats, displayName, weather)` — weather is fetched from Open-Meteo using coordinates derived from the `scraper_location` setting (lookup table for main NZ cities). No API key required. Falls back gracefully if fetch fails. Includes correct NZ Southern Hemisphere season. Strips any leading greeting from the AI response server-side.
