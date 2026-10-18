@@ -74,6 +74,19 @@ fresh Node process with clean env, and exits with code 42. `jobdeck.sh` loops on
 code 42 (restart signal). The frontend polls `GET /api/health` until the new process is
 up, then reloads.
 
+## Setting up on a new machine / distro
+
+1. Install Node 24 (needed for `node:sqlite`). Either nvm (`jobdeck.sh` sources `~/.nvm/nvm.sh`) or,
+   on Fedora, `sudo dnf install nodejs24-npm-bin`.
+2. `npm install`, then `npx playwright install chromium` if scraping is needed.
+3. To reuse an existing data folder, edit `DATA_PATH`, `LOG_PATH` and `BACKUP_PATH` in `.env`
+   (gitignored, machine-specific — mount points differ, e.g. `/media/james/Storage/...` on Mint vs
+   `/mnt/storage/...` on Fedora) and restart the backend. `.env` is only read at startup.
+   The data path field in Settings → Data & Storage is read-only by design.
+4. The DB carries jobs, settings, extracted CV text and chat history; `uploads/` carries the original files.
+   `DISPLAY_NAME`/`SCRAPER_LOCATION` in `.env` are only seeded on first run, so a pre-existing DB keeps its own
+   values. `display_name`, `backup_path` and `log_path` may need re-entering in Settings after a move.
+
 ## Vite config note
 
 `vite.config.js` sets `root: 'src/frontend'` — Vite serves from that directory.
