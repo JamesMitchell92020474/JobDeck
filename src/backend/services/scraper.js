@@ -484,7 +484,14 @@ async function runScrape(sources = ['Seek', 'Trade Me Jobs']) {
       if (!scraper) continue;
 
       log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-START', source: src });
-      const { jobs, browser, context } = await scraper();
+      let scraped;
+      try { scraped = await scraper(); }
+      catch (e) {
+        log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-ERROR', source: src, reason: e.message.split('\n')[0] });
+        results[src] = { error: e.message.split('\n')[0] };
+        continue;
+      }
+      const { jobs, browser, context } = scraped;
       const { count: saved, newJobs } = saveJobsToDB(jobs);
       log({ type: 'scraper', trigger: 'MANUAL', action: 'SCRAPE-DONE', source: src, reason: `${jobs.length} found, ${saved} new` });
       setSetting(`last_sync_${src}`, new Date().toISOString());

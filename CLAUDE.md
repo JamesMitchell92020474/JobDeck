@@ -470,6 +470,8 @@ Cron schedule: `src/backend/cron.js` — housekeeping 2:00 NZST (daily scrape re
 
 **Concurrency guard** — a module-level `scrapeInProgress` flag in `runScrape()` skips (logs `SCRAPE-SKIPPED`) a call made while a previous run is still active, including its background description-fetch phase. Without this, overlapping triggers (e.g. `sync_on_startup` racing a manual Sync click, or a nodemon restart mid-sync in dev) launch duplicate concurrent Playwright sessions hitting the same search pages, which is what made sync feel slow/stuck before this was added.
 
+**Failure handling** — if a source's scraper throws (e.g. Chromium not installed), `runScrape()` logs `SCRAPE-ERROR`, records `{ error }` for that source in the results, and continues with the next source. `results[src]` is `{ found, saved }` on success. The Dashboard sums `saved` for the "+N new" note and shows "Failed: <sources>" if any source errored.
+
 Scraper reads `scraper_location`, `scraper_keywords_tech`, `scraper_keywords_hospitality`, `scraper_max_age_days` from settings to build search URLs. Seek uses `daterange` param for age filtering. Saves `last_sync_{source}` setting on completion.
 
 Extracts per job from search results: title, company, location, url, job_type (normalised), posting_date.
@@ -543,6 +545,11 @@ wget -O /tmp/cs.zip "https://cdn.playwright.dev/builds/cft/<version>/linux64/chr
 unzip /tmp/cs.zip -d ~/.cache/ms-playwright/chromium_headless_shell-<build>/
 chmod +x <path-to-binary>
 ```
+
+### Sync does nothing / `SCRAPE-START` with no `SCRAPE-DONE`
+Playwright's Chromium isn't installed (`~/.cache/ms-playwright` missing — e.g. after an OS reinstall).
+Run `npx playwright install chromium`. Check `<LOG_PATH>/jd-scraper-YYYY-MM.log` (not the activity log)
+for `SCRAPE-ERROR` lines.
 
 ### node:sqlite experimental warning
 `node --no-warnings` suppresses it. It's stable in Node.js 24 despite the label.

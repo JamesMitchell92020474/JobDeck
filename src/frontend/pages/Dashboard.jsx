@@ -108,8 +108,9 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
     setSyncResult(null)
     try {
       const res = await api.post('/scrape', {})
-      const total = Object.values(res.results || {}).reduce((s, r) => s + (r.new || 0), 0)
-      setSyncResult(total)
+      const total = Object.values(res.results || {}).reduce((s, r) => s + (r.saved || 0), 0)
+      const errs = Object.entries(res.results || {}).filter(([, r]) => r.error).map(([k]) => k)
+      setSyncResult(errs.length ? `Failed: ${errs.join(', ')} — see activity log` : total)
       await loadJobs()
       api.get('/stats').then(setStats).catch(() => {})
     } catch {}
@@ -215,7 +216,7 @@ export default function Dashboard({ setRoute, setDetailJobId, onNewJob }) {
           <span className="dash-action-note" style={{ color: 'var(--col-rejected)' }}>Add search keywords and upload a CV in Settings</span>
         )}
         {syncResult != null && settings.scraper_keywords_tech?.trim() && (
-          <span className="dash-action-note">{syncResult > 0 ? `+${syncResult} new` : 'Up to date'}</span>
+          <span className="dash-action-note">{typeof syncResult === 'string' ? syncResult : syncResult > 0 ? `+${syncResult} new` : 'Up to date'}</span>
         )}
         <button className="btn-ai-filter dash-ai-btn" onClick={handleFilter} disabled={filtering || jobs.filter(j => !j.is_soft_deleted).length === 0} title="Score new jobs against your CV and archive poor fits">
           {filtering
