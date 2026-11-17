@@ -18,7 +18,7 @@ function AppInner() {
     return saved ? Number(saved) : null
   })
   const [addingJob,   setAddingJob]   = useState(false)
-  const { setJobs } = useApp()
+  const { setJobs, settingsLoaded } = useApp()
 
   const [boardQuery,      setBoardQuery]      = useState('')
   const [boardSrcFilter,  setBoardSrcFilter]  = useState('All')
@@ -71,7 +71,7 @@ function AppInner() {
           <CardDetail jobId={detailJobId} setRoute={navigate} />
         )}
         {route === 'chat' && <Chat />}
-        {route === 'settings' && <Settings />}
+        {route === 'settings' && (settingsLoaded ? <Settings /> : <div className="page-loading">Loading settings…</div>)}
         {addingJob && (
           <AddJobModal
             initialStatus="Interested"

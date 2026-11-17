@@ -34,6 +34,10 @@ export function AppProvider({ children }) {
   const [settings,    setSettings]    = useState(DEFAULT_SETTINGS)
   const [jobs,        setJobs]        = useState([])
   const [loadingJobs, setLoadingJobs] = useState(true)
+  // True once the real settings have come back from the server. The Settings page
+  // uses uncontrolled inputs (defaultValue), so it must not mount before this —
+  // otherwise it freezes on the defaults and onBlur saves them over the real values.
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   // useRef stores the latest settings in a way that's safe to read inside
   // event callbacks without stale data issues.
@@ -49,6 +53,7 @@ export function AppProvider({ children }) {
       // Spread operator (...) merges objects. Later values overwrite earlier ones,
       // so real DB settings win over defaults.
       setSettings(prev => ({ ...DEFAULT_SETTINGS, ...prev, ...s }))
+      setSettingsLoaded(true)
     } catch {}  // silently ignore network errors on load
   }, [])
 
@@ -119,7 +124,7 @@ export function AppProvider({ children }) {
   // Make all the shared data available to child components.
   return (
     <AppContext.Provider value={{
-      settings, saveSetting, loadSettings,
+      settings, settingsLoaded, saveSetting, loadSettings,
       jobs, loadJobs, setJobs, loadingJobs,
       columnCounts,
       getSourceColors, getDisabledSources,
